@@ -5,8 +5,10 @@ import {
   getRole,
   isDevAuthBypass,
   setRole,
+  setSummaryType,
   setToken,
   setTuringDomain,
+  type SummaryType,
 } from "../auth";
 import { getMe, login } from "../api";
 import { BrandLogo } from "../components/BrandLogo";
@@ -35,6 +37,7 @@ export function Login() {
       const role = me.role === "admin" ? "admin" : "client";
       setRole(role);
       setTuringDomain(deriveTuringDomainFromUser(me));
+      if (me.summary_type) setSummaryType(me.summary_type as SummaryType);
       navigate(role === "admin" ? "/inquiry" : "/dashboard", {
         replace: true,
       });

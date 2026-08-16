@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { ProjectSelect } from "../components/ProjectSelect";
 import {
@@ -191,12 +191,6 @@ export function Usage() {
                         (참고 · 실제 청구는 당월 누적 기준)
                       </span>
                     </p>
-                    <Link
-                      to="/billing"
-                      className="inline-block mt-2 text-xs text-brand-navy hover:text-brand-ink font-medium"
-                    >
-                      당월 예상 부과 금액 보기 →
-                    </Link>
                   </div>
                 );
               })()}

@@ -70,6 +70,8 @@ export async function getMe(): Promise<{
   user_id: string;
   display_name: string | null;
   role?: "client" | "admin";
+  client_id?: number | null;
+  summary_type?: "soap" | "cntt" | "mixed";
 }> {
   const res = await fetch(`${API_BASE}/admin/api/me`, {
     headers: getHeaders(),
@@ -143,6 +145,8 @@ export interface RequestItem {
   status: string;
   processing_sec: number | null;
   title: string | null;
+  intent?: string | null;
+  project_id?: number | null;
 }
 
 export interface RequestDetail {
@@ -164,11 +168,18 @@ export interface RequestDetail {
   error: Record<string, unknown> | null;
   title: string | null;
   simple_summary: string | null;
-  doctor_notes: string[] | null;
-  test_results: string[] | null;
-  symptom_record: string[] | null;
-  prescription_and_care: string[] | null;
+  doctor_notes?: string[] | null;
+  test_results?: string[] | null;
+  symptom_record?: string[] | null;
+  prescription_and_care?: string[] | null;
   conversation_content: unknown[] | null;
+  // CNTT-specific CIAR fields (top-level strings)
+  context?: string | null;
+  intent?: string | null;
+  action?: string | null;
+  result?: string | null;
+  issue?: string | null;
+  project_id?: number | null;
   summary_eval?: {
     simpleSummary_eval?: {
       summary_scores?: {
@@ -208,6 +219,25 @@ export async function getRequestDetail(jobId: string): Promise<RequestDetail> {
   return res.json();
 }
 
+export async function getCnttRequestDetail(jobId: string): Promise<RequestDetail> {
+  const res = await fetch(
+    `${API_BASE}/admin/cntt/requests/${encodeURIComponent(jobId)}`,
+    { headers: getHeaders() }
+  );
+  if (!res.ok) {
+    if (res.status === 404) throw new Error("해당 요청을 찾을 수 없습니다.");
+    const body = (await res.json().catch(() => ({}))) as {
+      detail?: string | { message?: string };
+    };
+    const msg =
+      (typeof body?.detail === "string"
+        ? body.detail
+        : body?.detail?.message) || `상세 조회 실패 (${res.status})`;
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
 export async function getRequestsList(
   page = 1,
   limit = 50,
@@ -223,6 +253,36 @@ export async function getRequestsList(
   if (status?.trim()) params.set("status", status.trim());
   if (project?.trim()) params.set("project_id", project.trim());
   const res = await fetch(`${API_BASE}/admin/api/requests?${params}`, {
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as {
+      detail?: string | { message?: string };
+    };
+    const msg =
+      (typeof body?.detail === "string"
+        ? body.detail
+        : body?.detail?.message) || `목록 조회 실패 (${res.status})`;
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export async function getCnttRequestsList(
+  page = 1,
+  limit = 50,
+  intent?: string,
+  status?: string,
+  project?: string
+): Promise<{ items: RequestItem[]; total: number }> {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+  if (intent?.trim()) params.set("intent", intent.trim());
+  if (status?.trim()) params.set("status", status.trim());
+  if (project?.trim()) params.set("project_id", project.trim());
+  const res = await fetch(`${API_BASE}/admin/cntt/requests?${params}`, {
     headers: getHeaders(),
   });
   if (!res.ok) {

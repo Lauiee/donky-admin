@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getRequestDetail, type RequestDetail } from "../api";
+import {
+  getCnttRequestDetail,
+  getRequestDetail,
+  type RequestDetail,
+} from "../api";
+import { getSummaryType } from "../auth";
 
 function Section({
   title,
@@ -19,23 +24,44 @@ function Section({
   );
 }
 
-/** conversation_content: { role, index, content }[] */
-function TranscriptionBlock({ items }: { items: unknown[] | null }) {
+const CNTT_ROLE_MAP: Record<string, string> = {
+  csr: "상담원",
+  customer: "고객",
+};
+
+function TranscriptionBlock({
+  items,
+  isCntt,
+}: {
+  items: unknown[] | null;
+  isCntt?: boolean;
+}) {
   if (!items?.length) return <span className="text-brand-slate">-</span>;
+
+  const sorted = [...(items as { role?: string; index?: number; content?: string }[])].sort(
+    (a, b) => (a.index ?? 0) - (b.index ?? 0)
+  );
+
   return (
     <div className="space-y-2 whitespace-pre-wrap">
-      {(items as { role?: string; content?: string }[]).map((item, i) => (
-        <p key={i}>
-          {item.role ? (
-            <>
-              <span className="font-medium text-brand-ink">{item.role}: </span>
-              {item.content ?? ""}
-            </>
-          ) : (
-            String(item.content ?? item)
-          )}
-        </p>
-      ))}
+      {sorted.map((item, i) => {
+        const rawRole = item.role ?? "";
+        const displayRole = isCntt
+          ? (CNTT_ROLE_MAP[rawRole] ?? rawRole)
+          : rawRole;
+        return (
+          <p key={i}>
+            {displayRole ? (
+              <>
+                <span className="font-medium text-brand-ink">{displayRole}: </span>
+                {item.content ?? ""}
+              </>
+            ) : (
+              String(item.content ?? item)
+            )}
+          </p>
+        );
+      })}
     </div>
   );
 }
@@ -45,7 +71,7 @@ function SummaryList({
   items,
 }: {
   label: string;
-  items: string[] | null;
+  items: string[] | null | undefined;
 }) {
   if (!items?.length) return null;
   return (
@@ -60,6 +86,22 @@ function SummaryList({
   );
 }
 
+function CiarField({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | null;
+}) {
+  if (!value) return null;
+  return (
+    <div className="mb-4 last:mb-0">
+      <h4 className="text-xs font-semibold text-brand-slate mb-1.5">{label}</h4>
+      <p className="text-brand-navy">{value}</p>
+    </div>
+  );
+}
+
 function ErrorDetail({ detail }: { detail: RequestDetail }) {
   const err = detail.error as {
     code?: string;
@@ -70,7 +112,6 @@ function ErrorDetail({ detail }: { detail: RequestDetail }) {
 
   return (
     <div className="space-y-6">
-      {/* 에러 배너 */}
       <div className="rounded-lg border border-red-200 bg-red-50 p-5">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 text-red-500 text-lg">⚠</span>
@@ -85,7 +126,6 @@ function ErrorDetail({ detail }: { detail: RequestDetail }) {
         </div>
       </div>
 
-      {/* 요청 정보 */}
       <div>
         <h3 className="text-sm font-semibold text-brand-navy mb-2">요청 정보</h3>
         <div className="bg-brand-surface rounded-lg divide-y divide-brand-line text-sm">
@@ -143,9 +183,52 @@ function ErrorDetail({ detail }: { detail: RequestDetail }) {
   );
 }
 
+function CnttSummary({ detail }: { detail: RequestDetail }) {
+  const hasAny =
+    detail.context ||
+    detail.intent ||
+    detail.action ||
+    detail.result ||
+    detail.issue;
+
+  if (!hasAny) return <span className="text-brand-slate">-</span>;
+
+  return (
+    <>
+      <CiarField label="상황" value={detail.context} />
+      <CiarField label="요청 의도" value={detail.intent} />
+      <CiarField label="처리 내용" value={detail.action} />
+      <CiarField label="결과" value={detail.result} />
+      <CiarField label="이슈" value={detail.issue} />
+    </>
+  );
+}
+
+function SoapSummary({ detail }: { detail: RequestDetail }) {
+  const hasAny =
+    detail.doctor_notes?.length ||
+    detail.test_results?.length ||
+    detail.symptom_record?.length ||
+    detail.prescription_and_care?.length;
+
+  if (!hasAny) return <span className="text-brand-slate">-</span>;
+
+  return (
+    <>
+      <SummaryList label="의사 소견" items={detail.doctor_notes} />
+      <SummaryList label="검사 결과" items={detail.test_results} />
+      <SummaryList label="증상 기록" items={detail.symptom_record} />
+      <SummaryList label="처방 및 관리" items={detail.prescription_and_care} />
+    </>
+  );
+}
+
 export function HistoryDetail() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
+  const summaryType = getSummaryType();
+  const isCntt = summaryType === "cntt";
+
   const [detail, setDetail] = useState<RequestDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -158,7 +241,10 @@ export function HistoryDetail() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    getRequestDetail(jobId)
+    const fetch = isCntt
+      ? getCnttRequestDetail(jobId)
+      : getRequestDetail(jobId);
+    fetch
       .then((d) => {
         if (!cancelled) setDetail(d);
       })
@@ -172,7 +258,7 @@ export function HistoryDetail() {
     return () => {
       cancelled = true;
     };
-  }, [jobId]);
+  }, [jobId, isCntt]);
 
   if (!jobId) {
     return (
@@ -210,6 +296,8 @@ export function HistoryDetail() {
     );
   }
 
+  const isError = detail.status === "error" || detail.status === "failed";
+
   return (
     <div>
       <div className="flex items-center gap-4 mb-6">
@@ -224,33 +312,22 @@ export function HistoryDetail() {
       </div>
 
       <div className="admin-card p-6">
-        {detail.status === "error" ? (
+        {isError ? (
           <ErrorDetail detail={detail} />
         ) : (
           <>
             <Section title="전사한 내용 전체">
-              <TranscriptionBlock items={detail.conversation_content ?? []} />
+              <TranscriptionBlock
+                items={detail.conversation_content ?? []}
+                isCntt={isCntt}
+              />
             </Section>
 
             <Section title="요약">
-              {detail.doctor_notes?.length ||
-              detail.test_results?.length ||
-              detail.symptom_record?.length ||
-              detail.prescription_and_care?.length ? (
-                <>
-                  <SummaryList label="의사 소견" items={detail.doctor_notes} />
-                  <SummaryList label="검사 결과" items={detail.test_results} />
-                  <SummaryList
-                    label="증상 기록"
-                    items={detail.symptom_record}
-                  />
-                  <SummaryList
-                    label="처방 및 관리"
-                    items={detail.prescription_and_care}
-                  />
-                </>
+              {isCntt ? (
+                <CnttSummary detail={detail} />
               ) : (
-                <span className="text-brand-slate">-</span>
+                <SoapSummary detail={detail} />
               )}
             </Section>
           </>

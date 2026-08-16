@@ -1,8 +1,25 @@
 const TOKEN_KEY = "donkey_admin_token";
 const ROLE_KEY = "donkey_admin_role";
 const TURING_DOMAIN_KEY = "donkey_admin_turing_domain";
+const SUMMARY_TYPE_KEY = "donkey_admin_summary_type";
 
 export type UserRole = "client" | "admin";
+
+export type SummaryType = "soap" | "cntt" | "mixed";
+
+export function getSummaryType(): SummaryType | null {
+  const v = localStorage.getItem(SUMMARY_TYPE_KEY);
+  if (v === "soap" || v === "cntt" || v === "mixed") return v;
+  return null;
+}
+
+export function setSummaryType(t: SummaryType): void {
+  localStorage.setItem(SUMMARY_TYPE_KEY, t);
+}
+
+export function clearSummaryType(): void {
+  localStorage.removeItem(SUMMARY_TYPE_KEY);
+}
 
 /** Turing 채점 도메인 — 라벨/설명 세트 식별자. */
 export type TuringDomain = "cnt" | "hippo";
@@ -76,6 +93,7 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
   clearRole();
   clearTuringDomain();
+  clearSummaryType();
 }
 
 /** 로컬에서 레이아웃만 볼 때 (백엔드·로그인 없이). 프로덕션 빌드에서는 무시됨. */

@@ -211,7 +211,11 @@ export function Inquiry() {
     <div>
       <PageHeader
         title="이용 문의"
-        subtitle="문의를 등록하거나 이전 문의 내역을 확인하세요."
+        subtitle={
+          isAdmin
+            ? "문의를 등록하거나 이전 문의 내역을 확인하세요."
+            : "문의를 등록하거나 내 문의 내역을 확인하세요."
+        }
         actions={
           <>
             {!isAdmin && (
@@ -444,7 +448,9 @@ export function Inquiry() {
                   {projects.length > 0 && (
                     <th className="px-5 py-3 font-medium">프로젝트</th>
                   )}
-                  <th className="px-5 py-3 font-medium">작성자</th>
+                  {isAdmin && (
+                    <th className="px-5 py-3 font-medium">작성자</th>
+                  )}
                   <th className="px-5 py-3 font-medium">등록일</th>
                   <th className="px-5 py-3 font-medium w-24"> </th>
                 </tr>
@@ -453,7 +459,9 @@ export function Inquiry() {
                 {items.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={projects.length > 0 ? 6 : 5}
+                      colSpan={
+                        (projects.length > 0 ? 1 : 0) + (isAdmin ? 1 : 0) + 4
+                      }
                       className="px-5 py-8 text-center text-brand-slate"
                     >
                       문의가 없습니다.
@@ -488,9 +496,11 @@ export function Inquiry() {
                             : "-"}
                         </td>
                       )}
-                      <td className="px-5 py-3 text-brand-slate">
-                        {item.author || "-"}
-                      </td>
+                      {isAdmin && (
+                        <td className="px-5 py-3 text-brand-slate">
+                          {item.author || "-"}
+                        </td>
+                      )}
                       <td className="px-5 py-3 text-brand-slate">
                         {formatDate(item.created_at)}
                       </td>

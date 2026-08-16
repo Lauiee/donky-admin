@@ -3,11 +3,13 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { ProjectSelect } from "../components/ProjectSelect";
 import {
+  getCnttRequestsList,
   getProjects,
   getRequestsList,
   type ProjectItem,
   type RequestItem,
 } from "../api";
+import { getSummaryType } from "../auth";
 
 const PAGE_SIZE = 20;
 
@@ -31,6 +33,7 @@ function statusLabel(s: string) {
     processing: "처리 중",
     pending: "대기",
     error: "오류",
+    failed: "오류",
   };
   return map[s] ?? s;
 }
@@ -41,6 +44,7 @@ function statusColor(s: string) {
     processing: "bg-amber-100 text-amber-800",
     pending: "bg-brand-surface text-brand-navy",
     error: "bg-red-100 text-red-800",
+    failed: "bg-red-100 text-red-800",
   };
   return map[s] ?? "bg-brand-surface text-brand-navy";
 }
@@ -49,16 +53,28 @@ export function History() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const projectFromUrl = searchParams.get("project_id") ?? "";
+  const summaryType = getSummaryType();
+  const isCntt = summaryType === "cntt";
+
   const [items, setItems] = useState<RequestItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [searchInput, setSearchInput] = useState("");
-  const [searchTitle, setSearchTitle] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [selectedProject, setSelectedProject] = useState(projectFromUrl);
+
+  // project id → name lookup (used for CNTT brand column)
+  const projectMap: Record<string, string> = {};
+  for (const p of projects) {
+    projectMap[String(p.id)] = p.name;
+  }
+
+  // hippo has a single project; CNTT has multiple
+  const showBrandColumn = isCntt && projects.length > 1;
 
   useEffect(() => {
     getProjects()
@@ -83,13 +99,22 @@ export function History() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    getRequestsList(
-      page,
-      PAGE_SIZE,
-      searchTitle || undefined,
-      statusFilter || undefined,
-      selectedProject || undefined
-    )
+    const fetch = isCntt
+      ? getCnttRequestsList(
+          page,
+          PAGE_SIZE,
+          searchQuery || undefined,
+          statusFilter || undefined,
+          selectedProject || undefined
+        )
+      : getRequestsList(
+          page,
+          PAGE_SIZE,
+          searchQuery || undefined,
+          statusFilter || undefined,
+          selectedProject || undefined
+        );
+    fetch
       .then(({ items: list, total: t }) => {
         if (!cancelled) {
           setItems(list);
@@ -106,14 +131,16 @@ export function History() {
     return () => {
       cancelled = true;
     };
-  }, [page, searchTitle, statusFilter, selectedProject]);
+  }, [page, searchQuery, statusFilter, selectedProject, isCntt]);
 
   const handleSearch = () => {
-    setSearchTitle(searchInput.trim());
+    setSearchQuery(searchInput.trim());
     setPage(1);
   };
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // CNTT uses "failed" for error status, hippo uses "error"
+  const errorStatusValue = isCntt ? "failed" : "error";
 
   return (
     <div>
@@ -141,7 +168,7 @@ export function History() {
               [
                 { value: "", label: "전체" },
                 { value: "completed", label: "완료" },
-                { value: "error", label: "오류" },
+                { value: errorStatusValue, label: "오류" },
               ] as const
             ).map((opt) => (
               <button
@@ -166,7 +193,7 @@ export function History() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            placeholder="제목 검색"
+            placeholder={isCntt ? "의도 검색" : "제목 검색"}
             className="admin-input flex-1 min-w-[200px]"
           />
           <button
@@ -176,12 +203,12 @@ export function History() {
           >
             검색
           </button>
-          {(searchTitle || statusFilter) && (
+          {(searchQuery || statusFilter) && (
             <span className="text-xs text-brand-slate">
-              {searchTitle ? `"${searchTitle}" ` : ""}
+              {searchQuery ? `"${searchQuery}" ` : ""}
               {statusFilter === "completed"
                 ? "완료만"
-                : statusFilter === "error"
+                : statusFilter
                 ? "오류만"
                 : ""}
             </span>
@@ -203,7 +230,12 @@ export function History() {
                     <th className="px-5 py-3 font-medium">요청 시각</th>
                     <th className="px-5 py-3 font-medium">상태</th>
                     <th className="px-5 py-3 font-medium">처리 시간</th>
-                    <th className="px-5 py-3 font-medium">제목</th>
+                    {showBrandColumn && (
+                      <th className="px-5 py-3 font-medium">브랜드</th>
+                    )}
+                    <th className="px-5 py-3 font-medium">
+                      {isCntt ? "요청 의도" : "제목"}
+                    </th>
                     <th className="px-5 py-3 font-medium w-24"> </th>
                   </tr>
                 </thead>
@@ -211,52 +243,65 @@ export function History() {
                   {items.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={showBrandColumn ? 6 : 5}
                         className="px-5 py-8 text-center text-brand-slate"
                       >
                         요청 내역 없음
                       </td>
                     </tr>
                   ) : (
-                    items.map((r) => (
-                      <tr
-                        key={r.job_id}
-                        className="border-t border-brand-line/70 hover:bg-brand-surface/80"
-                      >
-                        <td className="px-5 py-3 text-brand-navy">
-                          {formatDate(r.created_at)}
-                        </td>
-                        <td className="px-5 py-3">
-                          <span
-                            className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${statusColor(
-                              r.status
-                            )}`}
-                          >
-                            {statusLabel(r.status)}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 text-brand-navy">
-                          {r.processing_sec != null
-                            ? `${r.processing_sec}초`
-                            : "-"}
-                        </td>
-                        <td
-                          className="px-5 py-3 text-brand-navy max-w-[240px] truncate"
-                          title={r.title ?? undefined}
+                    items.map((r) => {
+                      const displayText = isCntt
+                        ? (r.intent ?? r.title ?? "-")
+                        : (r.title ?? "-");
+                      const brandName = showBrandColumn
+                        ? (projectMap[String(r.project_id)] ?? "-")
+                        : null;
+                      return (
+                        <tr
+                          key={r.job_id}
+                          className="border-t border-brand-line/70 hover:bg-brand-surface/80"
                         >
-                          {r.title || "-"}
-                        </td>
-                        <td className="px-5 py-3">
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/history/${r.job_id}`)}
-                            className="px-3 py-1.5 rounded-lg text-sm font-medium text-brand-navy bg-brand-surface hover:bg-brand-line/50"
+                          <td className="px-5 py-3 text-brand-navy">
+                            {formatDate(r.created_at)}
+                          </td>
+                          <td className="px-5 py-3">
+                            <span
+                              className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${statusColor(
+                                r.status
+                              )}`}
+                            >
+                              {statusLabel(r.status)}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-brand-navy">
+                            {r.processing_sec != null
+                              ? `${r.processing_sec}초`
+                              : "-"}
+                          </td>
+                          {showBrandColumn && (
+                            <td className="px-5 py-3 text-brand-navy">
+                              {brandName}
+                            </td>
+                          )}
+                          <td
+                            className="px-5 py-3 text-brand-navy max-w-[240px] truncate"
+                            title={displayText !== "-" ? displayText : undefined}
                           >
-                            상세
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                            {displayText}
+                          </td>
+                          <td className="px-5 py-3">
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/history/${r.job_id}`)}
+                              className="px-3 py-1.5 rounded-lg text-sm font-medium text-brand-navy bg-brand-surface hover:bg-brand-line/50"
+                            >
+                              상세
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
