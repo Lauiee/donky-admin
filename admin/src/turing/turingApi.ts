@@ -7,6 +7,14 @@
 
 import { getTuringDomain } from "../auth";
 
+async function turingFetch(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch {
+    throw new Error("서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
+  }
+}
+
 export interface SttMetricsApi {
   /** 로그 기반 결정값 — 항상 산출 */
   stt_velocity: number;
@@ -108,7 +116,7 @@ export interface TuringHealthResponse {
 
 export async function fetchTuringHealth(): Promise<TuringHealthResponse> {
   const u = buildTuringUrl("/health");
-  const res = await fetch(u.toString(), {
+  const res = await turingFetch(u.toString(), {
     headers: { Accept: "application/json" },
   });
   if (!res.ok) {
@@ -167,7 +175,7 @@ export async function fetchTuringEvaluations(params: {
 
   const u = buildTuringUrl("/evaluations");
   sp.forEach((v, k) => u.searchParams.set(k, v));
-  const res = await fetch(u.toString(), { headers: turingHeaders() });
+  const res = await turingFetch(u.toString(), { headers: turingHeaders() });
   if (res.status === 401) {
     throw new Error("Turing API 인증에 실패했습니다. X-API-Key를 확인해 주세요.");
   }
@@ -195,7 +203,7 @@ export async function fetchTuringEvaluationById(
   }
 
   const u = buildTuringUrl(`/evaluations/${id}`);
-  const res = await fetch(u.toString(), { headers: turingHeaders() });
+  const res = await turingFetch(u.toString(), { headers: turingHeaders() });
   if (res.status === 401) {
     throw new Error("Turing API 인증에 실패했습니다. X-API-Key를 확인해 주세요.");
   }
