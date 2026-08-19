@@ -351,7 +351,6 @@ export function TuringDashboardView({
     MetricTrendPoint[][]
   >(() => buildFallbackMetricTrendSeries().summary);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   // 실제 API 데이터일 때만 채워지는 최근 평가 목록(상세 진입용). 샘플 폴백 시 비움.
   const [items, setItems] = useState<EvaluationListItemApi[]>([]);
 
@@ -374,7 +373,6 @@ export function TuringDashboardView({
     let cancelled = false;
     (async () => {
       setLoading(true);
-      setError(null);
       try {
         const res = await fetchTuringEvaluations({
           page: 1,
@@ -383,7 +381,6 @@ export function TuringDashboardView({
         if (cancelled) return;
         if (res.items.length === 0) {
           setItems([]);
-          setError("조회된 채점 결과가 없습니다.");
           setDemo(buildFallbackDemo());
           setPerCaseComposite(PER_CASE_COMPOSITE_FALLBACK);
           const fallbackTimes = buildFallbackTrendTimeLabels(
@@ -411,10 +408,9 @@ export function TuringDashboardView({
         setSttMetricTrendSeries(trendSeries.stt);
         setSummaryMetricTrendSeries(trendSeries.summary);
         setItems(res.items);
-      } catch (e) {
+      } catch {
         if (!cancelled) {
           setItems([]);
-          setError(e instanceof Error ? e.message : "불러오기 실패");
           setDemo(buildFallbackDemo());
           setPerCaseComposite(PER_CASE_COMPOSITE_FALLBACK);
           const fallbackTimes = buildFallbackTrendTimeLabels(
@@ -599,12 +595,6 @@ export function TuringDashboardView({
   return (
     <div className={loading ? "opacity-60" : ""}>
       <PageHeader title={pageTitle} subtitle={pageSubtitle} />
-
-      {error && (
-        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-sm text-amber-900">
-          {error}
-        </div>
-      )}
 
       <section className="mb-10">
         <TuringSectionTitle title="Velocity" />
