@@ -10,6 +10,14 @@ const rawBase =
   (import.meta.env.VITE_API_BASE as string | undefined)?.trim() ?? "";
 const API_BASE = rawBase || (import.meta.env.DEV ? "/api" : "");
 
+async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch {
+    throw new Error("서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
+  }
+}
+
 function getHeaders(includeAuth = true): HeadersInit {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -25,7 +33,7 @@ export async function login(
   userId: string,
   password: string
 ): Promise<{ access_token: string }> {
-  const res = await fetch(`${API_BASE}/admin/api/login`, {
+  const res = await apiFetch(`${API_BASE}/admin/api/login`, {
     method: "POST",
     headers: getHeaders(false),
     body: JSON.stringify({ user_id: userId, password }),
@@ -50,7 +58,7 @@ export interface ProjectItem {
 }
 
 export async function getProjects(): Promise<{ items: ProjectItem[] }> {
-  const res = await fetch(`${API_BASE}/admin/api/projects`, {
+  const res = await apiFetch(`${API_BASE}/admin/api/projects`, {
     headers: getHeaders(),
   });
   if (!res.ok) {
@@ -73,7 +81,7 @@ export async function getMe(): Promise<{
   client_id?: number | null;
   summary_type?: "soap" | "cntt" | "mixed";
 }> {
-  const res = await fetch(`${API_BASE}/admin/api/me`, {
+  const res = await apiFetch(`${API_BASE}/admin/api/me`, {
     headers: getHeaders(),
   });
   if (!res.ok) throw new Error("Unauthorized");
@@ -123,7 +131,7 @@ export async function getUsage(
 ): Promise<UsageStats> {
   const params = new URLSearchParams({ from_date: fromDate, to_date: toDate });
   if (project?.trim()) params.set("project_id", project.trim());
-  const res = await fetch(`${API_BASE}/admin/api/usage?${params}`, {
+  const res = await apiFetch(`${API_BASE}/admin/api/usage?${params}`, {
     headers: getHeaders(),
   });
   if (!res.ok) {
@@ -201,7 +209,7 @@ export interface RequestDetail {
 }
 
 export async function getRequestDetail(jobId: string): Promise<RequestDetail> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE}/admin/api/requests/${encodeURIComponent(jobId)}`,
     { headers: getHeaders() }
   );
@@ -220,7 +228,7 @@ export async function getRequestDetail(jobId: string): Promise<RequestDetail> {
 }
 
 export async function getCnttRequestDetail(jobId: string): Promise<RequestDetail> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE}/admin/cntt/requests/${encodeURIComponent(jobId)}`,
     { headers: getHeaders() }
   );
@@ -252,7 +260,7 @@ export async function getRequestsList(
   if (title?.trim()) params.set("title", title.trim());
   if (status?.trim()) params.set("status", status.trim());
   if (project?.trim()) params.set("project_id", project.trim());
-  const res = await fetch(`${API_BASE}/admin/api/requests?${params}`, {
+  const res = await apiFetch(`${API_BASE}/admin/api/requests?${params}`, {
     headers: getHeaders(),
   });
   if (!res.ok) {
@@ -282,7 +290,7 @@ export async function getCnttRequestsList(
   if (intent?.trim()) params.set("intent", intent.trim());
   if (status?.trim()) params.set("status", status.trim());
   if (project?.trim()) params.set("project_id", project.trim());
-  const res = await fetch(`${API_BASE}/admin/cntt/requests?${params}`, {
+  const res = await apiFetch(`${API_BASE}/admin/cntt/requests?${params}`, {
     headers: getHeaders(),
   });
   if (!res.ok) {
@@ -316,7 +324,7 @@ export async function getErrors(
 ): Promise<{ items: ErrorItem[] }> {
   const params = new URLSearchParams({ period });
   if (project?.trim()) params.set("project_id", project.trim());
-  const res = await fetch(`${API_BASE}/admin/api/errors?${params}`, {
+  const res = await apiFetch(`${API_BASE}/admin/api/errors?${params}`, {
     headers: getHeaders(),
   });
   if (!res.ok) {
@@ -341,7 +349,7 @@ export interface HealthStatus {
 /** 백엔드 API 서버 헬스체크 (인증 불필요) */
 export async function getHealthCheck(): Promise<HealthStatus> {
   try {
-    const res = await fetch(`${API_BASE}/health`, {
+    const res = await apiFetch(`${API_BASE}/health`, {
       headers: getHeaders(false),
     });
     if (!res.ok) {
@@ -373,7 +381,7 @@ export async function getDashboard(project?: string): Promise<DashboardStats> {
   const params = project?.trim()
     ? `?project_id=${encodeURIComponent(project.trim())}`
     : "";
-  const res = await fetch(`${API_BASE}/admin/api/dashboard${params}`, {
+  const res = await apiFetch(`${API_BASE}/admin/api/dashboard${params}`, {
     headers: getHeaders(),
   });
   if (!res.ok) {
@@ -428,7 +436,7 @@ export async function uploadInquiryAttachment(
   const token = getToken();
   const headers: HeadersInit = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE}/admin/api/inquiries/attachments/upload`,
     {
       method: "POST",
@@ -468,7 +476,7 @@ export async function createInquiry(
     attachment_urls: attachmentUrls ?? [],
   };
   if (projectId?.trim()) body_.project_id = projectId.trim();
-  const res = await fetch(`${API_BASE}/admin/api/inquiries`, {
+  const res = await apiFetch(`${API_BASE}/admin/api/inquiries`, {
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify(body_),
@@ -500,7 +508,7 @@ export async function getInquiriesList(
   if (status?.trim()) params.set("status", status.trim());
   if (q?.trim()) params.set("q", q.trim());
   if (projectId?.trim()) params.set("project_id", projectId.trim());
-  const res = await fetch(`${API_BASE}/admin/api/inquiries?${params}`, {
+  const res = await apiFetch(`${API_BASE}/admin/api/inquiries?${params}`, {
     headers: getHeaders(),
   });
   if (!res.ok) {
@@ -531,7 +539,7 @@ export async function getInquiriesAll(
   if (status?.trim()) params.set("status", status.trim());
   if (q?.trim()) params.set("q", q.trim());
   if (projectId?.trim()) params.set("project_id", projectId.trim());
-  const res = await fetch(`${API_BASE}/admin/api/inquiries/all?${params}`, {
+  const res = await apiFetch(`${API_BASE}/admin/api/inquiries/all?${params}`, {
     headers: getHeaders(),
   });
   if (!res.ok) {
@@ -549,7 +557,7 @@ export async function getInquiriesAll(
 }
 
 export async function getInquiryDetail(id: string): Promise<InquiryDetail> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE}/admin/api/inquiries/${encodeURIComponent(id)}`,
     { headers: getHeaders() }
   );
@@ -571,7 +579,7 @@ export async function updateInquiry(
   id: string,
   data: { title: string; body: string; attachment_urls: string[] }
 ): Promise<InquiryDetail> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE}/admin/api/inquiries/${encodeURIComponent(id)}`,
     {
       method: "PATCH",
@@ -593,7 +601,7 @@ export async function updateInquiry(
 }
 
 export async function deleteInquiry(id: string): Promise<void> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE}/admin/api/inquiries/${encodeURIComponent(id)}`,
     { method: "DELETE", headers: getHeaders() }
   );
@@ -613,7 +621,7 @@ export async function updateInquiryStatus(
   id: string,
   status: string
 ): Promise<{ id: string; status: string; updated_at: string }> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE}/admin/api/inquiries/${encodeURIComponent(id)}`,
     {
       method: "PATCH",
@@ -643,7 +651,7 @@ export async function createInquiryReply(
   created_at: string;
   author: string | null;
 }> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE}/admin/api/inquiries/${encodeURIComponent(id)}/replies`,
     {
       method: "POST",
@@ -675,7 +683,7 @@ export async function updateInquiryReply(
   created_at: string;
   author: string | null;
 }> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE}/admin/api/inquiries/${encodeURIComponent(
       inquiryId
     )}/replies/${encodeURIComponent(replyId)}`,
@@ -703,7 +711,7 @@ export async function deleteInquiryReply(
   inquiryId: string,
   replyId: string
 ): Promise<void> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE}/admin/api/inquiries/${encodeURIComponent(
       inquiryId
     )}/replies/${encodeURIComponent(replyId)}`,
@@ -723,7 +731,7 @@ export async function deleteInquiryReply(
 
 /** 세션 연장: 새 토큰(4시간) 발급 후 저장용 반환 */
 export async function refreshSession(): Promise<{ access_token: string }> {
-  const res = await fetch(`${API_BASE}/admin/api/refresh`, {
+  const res = await apiFetch(`${API_BASE}/admin/api/refresh`, {
     method: "POST",
     headers: getHeaders(),
   });
