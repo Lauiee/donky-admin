@@ -213,6 +213,11 @@ function shortDateLabel(iso: string): string {
   return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** slug 하나가 STT/SUMMARY 두 그룹에 겹쳐 쓰이는 경우(CKD)가 있어 그룹까지 합쳐 키로 씀 */
+export function metricDefKey(group: AiMetricGroup, slug: string): string {
+  return `${group}:${slug}`;
+}
+
 /**
  * @param metrics 카드 값·등급에 쓸 평가 결과 — 단건(요청 상세)이든, 최근 평가
  *   평균(averageMetricsApi 결과, Turing 페이지)이든 형태만 같으면 됨.
@@ -220,11 +225,17 @@ function shortDateLabel(iso: string): string {
  *   내부에서 오래된 순으로 정렬) — 카드 추이선에 씀. 생략 시 추이선 없이 평평한 기준선.
  * @param opts.highlightDomainSpecific CS(상담) 도메인 특화 지표(CKM/CKD/CIR) 강조 표시.
  *   Turing 페이지에서 cnt 도메인일 때만 켬 — hippo(의료)엔 해당 없음.
+ * @param opts.rawSeriesBySlug metricDefKey(group, slug) → 원시값(0~1) 시계열. trendItems
+ *   대신/함께 쓸 수 있음 — Turing 페이지처럼 이미 계산된 지표별 추이 배열이 있을 때 사용
+ *   (값은 이 함수가 각 지표의 표시 스케일로 알아서 변환함).
  */
 export function buildAiMetricCards(
   metrics: MetricsApi,
   trendItems?: EvaluationListItemApi[],
-  opts?: { highlightDomainSpecific?: boolean }
+  opts?: {
+    highlightDomainSpecific?: boolean;
+    rawSeriesBySlug?: Record<string, { label: string; value: number }[]>;
+  }
 ): AiMetricCardData[] {
   const sortedTrend = trendItems?.length
     ? [...trendItems].sort(
@@ -237,7 +248,10 @@ export function buildAiMetricCards(
     if (raw == null) return [];
 
     let series: AiMetricSeriesPoint[] | undefined;
-    if (sortedTrend) {
+    const rawSeries = opts?.rawSeriesBySlug?.[metricDefKey(def.group, def.slug)];
+    if (rawSeries && rawSeries.length >= 2) {
+      series = rawSeries.map((p) => ({ label: p.label, value: def.toDisplay(p.value) }));
+    } else if (sortedTrend) {
       const pts = sortedTrend.flatMap((item) => {
         const r = def.read(item.metrics);
         if (r == null) return [];

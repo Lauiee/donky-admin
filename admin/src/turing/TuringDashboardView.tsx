@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { AiMetricsPanel } from "../components/AiMetricsPanel";
-import { buildAiMetricCards } from "./aiMetricCards";
+import { buildAiMetricCards, metricDefKey } from "./aiMetricCards";
 import type { MetricsApi } from "./turingApi";
 import { HeptagonRadar } from "./HeptagonRadar";
 import {
@@ -468,14 +468,48 @@ export function TuringDashboardView({
     [demo]
   );
 
-  // 추이선은 실제 평가 목록(items)이 있을 때만 — 폴백 시엔 카드가 평평한
-  // 기준선으로 알아서 대체 표시.
+  // sttMetricTrendSeries/summaryMetricTrendSeries는 이미 이 페이지가 계산해 둔
+  // 지표별 추이(실 API 있으면 실제 값, 없으면 기존 폴백 샘플 곡선) — 배열 순서가
+  // buildMetricTrendSeriesFromItems/buildFallbackMetricTrendSeries의 추출 순서와
+  // 같아서 그 순서 그대로 slug를 붙여 카드 쪽에 넘긴다.
+  const rawSeriesBySlug = useMemo(() => {
+    const sttOrder: { group: "PERFORMANCE" | "STT"; slug: string }[] = [
+      { group: "PERFORMANCE", slug: "STT_VELOCITY" },
+      { group: "STT", slug: "UER" },
+      { group: "STT", slug: "PII_PROTECTION" },
+      { group: "STT", slug: "CKM" },
+      { group: "STT", slug: "CKD" },
+      { group: "STT", slug: "DIARIZATION" },
+      { group: "STT", slug: "REDUNDANCY" },
+    ];
+    const summaryOrder: { group: "PERFORMANCE" | "SUMMARY"; slug: string }[] = [
+      { group: "PERFORMANCE", slug: "SUMMARY_VELOCITY" },
+      { group: "SUMMARY", slug: "HR" },
+      { group: "SUMMARY", slug: "SSR" },
+      { group: "SUMMARY", slug: "ICR" },
+      { group: "SUMMARY", slug: "CKD" },
+      { group: "SUMMARY", slug: "CIR" },
+      { group: "SUMMARY", slug: "SSA" },
+    ];
+    const map: Record<string, { label: string; value: number }[]> = {};
+    sttOrder.forEach(({ group, slug }, i) => {
+      const pts = sttMetricTrendSeries[i];
+      if (pts?.length) map[metricDefKey(group, slug)] = pts;
+    });
+    summaryOrder.forEach(({ group, slug }, i) => {
+      const pts = summaryMetricTrendSeries[i];
+      if (pts?.length) map[metricDefKey(group, slug)] = pts;
+    });
+    return map;
+  }, [sttMetricTrendSeries, summaryMetricTrendSeries]);
+
   const aiMetricCards = useMemo(
     () =>
       buildAiMetricCards(metricsFromDemo, items.length ? items : undefined, {
         highlightDomainSpecific: domain === "cnt",
+        rawSeriesBySlug,
       }),
-    [metricsFromDemo, items, domain]
+    [metricsFromDemo, items, domain, rawSeriesBySlug]
   );
 
   const sttTiers = tiersForSttRadarNullable({
