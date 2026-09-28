@@ -196,17 +196,28 @@ export function AiMetricCard({
   data: AiMetricCardData;
   variant: AiMetricCardVariant;
 }) {
-  const { group, label, description, value, grade, series } = data;
+  const { group, label, description, value, grade, series, highlight } = data;
   if (value == null || grade == null) return null;
   const chartHeight = variant === "areaBig" ? 56 : variant === "line" ? 40 : 28;
   const chartBig = variant === "areaBig" || variant === "line";
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden rounded-[12px] border border-[#eaecf3] bg-white p-[13px]">
+    <div
+      className={`flex min-w-0 flex-1 flex-col gap-2 overflow-hidden rounded-[12px] border p-[13px] ${
+        highlight
+          ? "border-sky-300 bg-sky-50/60 ring-1 ring-sky-200"
+          : "border-[#eaecf3] bg-white"
+      }`}
+    >
       <div className="flex items-center justify-between">
         <span className="rounded-[4px] bg-[#eaecf3] px-2 py-0.5 text-[10px] font-semibold text-[#222a3d]">
           {group}
         </span>
+        {highlight && (
+          <span className="rounded-full bg-sky-200/70 px-2 py-0.5 text-[10px] font-semibold text-sky-800">
+            CS 특화
+          </span>
+        )}
       </div>
 
       <div className="flex flex-col gap-1">

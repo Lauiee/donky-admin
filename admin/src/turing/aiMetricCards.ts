@@ -17,6 +17,7 @@ export interface AiMetricSeriesPoint {
 
 export interface AiMetricCardData {
   group: AiMetricGroup;
+  slug: string;
   label: string;
   description: string;
   /** 0~100 표시값 */
@@ -28,10 +29,20 @@ export interface AiMetricCardData {
    * 2건 미만이면 undefined — 카드 쪽에서 평평한 기준선으로 대체 표시.
    */
   series?: AiMetricSeriesPoint[];
+  /** CS(상담) 도메인 특화 지표 강조 — buildAiMetricCards의 highlightDomainSpecific 참고 */
+  highlight?: boolean;
 }
+
+/**
+ * 구 Turing 디자인에서 하늘색으로 강조하던 "CS 도메인 특화 지표" slug 중,
+ * 실제 Turing 평가 API가 값을 주는 것만 골랐음. (KCR/IDR/AC/RRS/CSR_TURN은
+ * API에 없는 목업 전용 지표라 이 카드 세트에는 애초에 없어 제외)
+ */
+const DOMAIN_SPECIAL_SLUGS = new Set(["CKM", "CKD", "CIR"]);
 
 type MetricDef = {
   group: AiMetricGroup;
+  slug: string;
   label: string;
   description: string;
   read: (m: MetricsApi) => number | null;
@@ -48,6 +59,7 @@ function ratioDef(
 ): MetricDef {
   return {
     group,
+    slug,
     label,
     description,
     read,
@@ -58,6 +70,7 @@ function ratioDef(
 
 function velocityDef(
   group: AiMetricGroup,
+  slug: string,
   label: string,
   description: string,
   read: (m: MetricsApi) => number | null,
@@ -65,6 +78,7 @@ function velocityDef(
 ): MetricDef {
   return {
     group,
+    slug,
     label,
     description,
     read,
@@ -81,6 +95,7 @@ function velocityDef(
 const METRIC_DEFS: MetricDef[] = [
   velocityDef(
     "PERFORMANCE",
+    "PROCESSING_VELOCITY",
     "전체 처리 속도",
     "음성 입력부터 요약 산출까지의 정규화 속도",
     (m) => m.processing_velocity,
@@ -88,6 +103,7 @@ const METRIC_DEFS: MetricDef[] = [
   ),
   velocityDef(
     "PERFORMANCE",
+    "STT_VELOCITY",
     "STT 처리 속도",
     "STT 처리 속도",
     (m) => m.stt.stt_velocity,
@@ -95,6 +111,7 @@ const METRIC_DEFS: MetricDef[] = [
   ),
   velocityDef(
     "PERFORMANCE",
+    "SUMMARY_VELOCITY",
     "요약 처리 속도",
     "요약 처리 속도",
     (m) => m.summary.summarization_velocity,
@@ -197,13 +214,17 @@ function shortDateLabel(iso: string): string {
 }
 
 /**
- * @param metrics 이 요청(job) 하나의 평가 결과 — 카드 값·등급에 씀.
+ * @param metrics 카드 값·등급에 쓸 평가 결과 — 단건(요청 상세)이든, 최근 평가
+ *   평균(averageMetricsApi 결과, Turing 페이지)이든 형태만 같으면 됨.
  * @param trendItems 같은 계정(cnt/hippo)의 최근 평가 목록(시간순 무관하게 넘겨도 됨,
  *   내부에서 오래된 순으로 정렬) — 카드 추이선에 씀. 생략 시 추이선 없이 평평한 기준선.
+ * @param opts.highlightDomainSpecific CS(상담) 도메인 특화 지표(CKM/CKD/CIR) 강조 표시.
+ *   Turing 페이지에서 cnt 도메인일 때만 켬 — hippo(의료)엔 해당 없음.
  */
 export function buildAiMetricCards(
   metrics: MetricsApi,
-  trendItems?: EvaluationListItemApi[]
+  trendItems?: EvaluationListItemApi[],
+  opts?: { highlightDomainSpecific?: boolean }
 ): AiMetricCardData[] {
   const sortedTrend = trendItems?.length
     ? [...trendItems].sort(
@@ -227,12 +248,61 @@ export function buildAiMetricCards(
 
     const card: AiMetricCardData = {
       group: def.group,
+      slug: def.slug,
       label: def.label,
       description: def.description,
       value: def.toDisplay(raw),
       grade: def.toGrade(raw),
       series,
+      highlight:
+        opts?.highlightDomainSpecific && DOMAIN_SPECIAL_SLUGS.has(def.slug)
+          ? true
+          : undefined,
     };
     return [card];
   });
+}
+
+/**
+ * 여러 평가 건의 원시 지표를 단순 평균해 MetricsApi 모양으로 합침.
+ * Turing 페이지(계정 전체 최근 평가)처럼 "건별"이 아니라 "최근 추세의 대표값"이
+ * 필요할 때 씀 — null 값은 평균에서 제외.
+ */
+export function averageMetricsApi(items: EvaluationListItemApi[]): MetricsApi | null {
+  if (items.length === 0) return null;
+  const avg = (vals: (number | null | undefined)[]): number => {
+    const nums = vals.filter((v): v is number => v != null && !Number.isNaN(v));
+    return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
+  };
+  const avgOrNull = (vals: (number | null | undefined)[]): number | null => {
+    const nums = vals.filter((v): v is number => v != null && !Number.isNaN(v));
+    return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
+  };
+  return {
+    processing_velocity: avg(items.map((i) => i.metrics.processing_velocity)),
+    stt: {
+      stt_velocity: avg(items.map((i) => i.metrics.stt.stt_velocity)),
+      uer: avgOrNull(items.map((i) => i.metrics.stt.uer)),
+      pii_protection: avgOrNull(items.map((i) => i.metrics.stt.pii_protection)),
+      mmr: avgOrNull(items.map((i) => i.metrics.stt.mmr)),
+      mdr: avgOrNull(items.map((i) => i.metrics.stt.mdr)),
+      diarization_accuracy: avgOrNull(
+        items.map((i) => i.metrics.stt.diarization_accuracy)
+      ),
+      redundancy_ratio: avgOrNull(items.map((i) => i.metrics.stt.redundancy_ratio)),
+    },
+    summary: {
+      summarization_velocity: avgOrNull(
+        items.map((i) => i.metrics.summary.summarization_velocity)
+      ),
+      hallucination_ratio: avgOrNull(
+        items.map((i) => i.metrics.summary.hallucination_ratio)
+      ),
+      ssr: avgOrNull(items.map((i) => i.metrics.summary.ssr)),
+      icr: avgOrNull(items.map((i) => i.metrics.summary.icr)),
+      mir: avgOrNull(items.map((i) => i.metrics.summary.mir)),
+      summary_mdr: avgOrNull(items.map((i) => i.metrics.summary.summary_mdr)),
+      ssa: avgOrNull(items.map((i) => i.metrics.summary.ssa)),
+    },
+  };
 }

@@ -24,10 +24,13 @@ const GROUP_ORDER: AiMetricGroup[] = ["PERFORMANCE", "STT", "SUMMARY"];
 export function AiMetricsPanel({
   cards,
   variant,
+  emptyMessage = "AI 성능 평가 데이터가 없습니다.",
 }: {
   cards: AiMetricCardData[];
   /** 생략하면 resolveAiMetricCardVariant()(.env 파라미터) 값을 씀 */
   variant?: AiMetricCardVariant;
+  /** 카드가 하나도 없을 때 보여줄 문구 (상황별로 다르게 — 건별/계정별) */
+  emptyMessage?: string;
 }) {
   const resolved = variant ?? resolveAiMetricCardVariant();
 
@@ -39,13 +42,30 @@ export function AiMetricsPanel({
   if (groups.length === 0) {
     return (
       <div className="rounded-[12px] border border-[#eaecf3] bg-[#fbfcff] p-8 text-center text-sm text-[#56607a]">
-        이 요청에 대한 AI 성능 평가 데이터가 없습니다.
+        {emptyMessage}
       </div>
     );
   }
 
+  const hasHighlighted = cards.some((c) => c.highlight);
+
   return (
     <div className="flex flex-col gap-4">
+      {hasHighlighted && (
+        <div className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50/70 px-3 py-2 text-xs text-[#39435a]">
+          <span
+            className="h-3 w-3 shrink-0 rounded-sm bg-sky-200 ring-1 ring-sky-300"
+            aria-hidden
+          />
+          <span>
+            하늘색으로 표시된 항목은{" "}
+            <strong className="font-semibold text-sky-700">
+              CS 도메인 특화 지표
+            </strong>
+            입니다.
+          </span>
+        </div>
+      )}
       {groups.map(({ group, items }) => (
         <div key={group} className="flex flex-col gap-2">
           <div className="flex items-center gap-1">

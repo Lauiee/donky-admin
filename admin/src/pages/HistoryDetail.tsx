@@ -10,87 +10,9 @@ import {
 import { getSummaryType } from "../auth";
 import { PageHeader } from "../components/PageHeader";
 import { ServerStatusBadge } from "../components/ServerStatusBadge";
-import { AiMetricsPanel } from "../components/AiMetricsPanel";
-import { buildAiMetricCards, type AiMetricCardData } from "../turing/aiMetricCards";
-import { fetchTuringEvaluations, hasTuringApiKey } from "../turing/turingApi";
 import iconBack from "../assets/dashboard/detail-back.svg";
 import iconSummary from "../assets/dashboard/detail-summary-icon.svg";
 import iconTranscript from "../assets/dashboard/detail-transcript-icon.svg";
-
-/** "AI 성능 지표" 탭 — 이 job_id에 해당하는 Turing 평가 1건을 찾아 카드로 변환 */
-function AiMetricsTab({ jobId }: { jobId: string }) {
-  const [state, setState] = useState<
-    | { status: "loading" }
-    | { status: "no-key" }
-    | { status: "error"; message: string }
-    | { status: "empty" }
-    | { status: "ready"; cards: AiMetricCardData[] }
-  >({ status: "loading" });
-
-  useEffect(() => {
-    if (!hasTuringApiKey()) {
-      setState({ status: "no-key" });
-      return;
-    }
-    let cancelled = false;
-    setState({ status: "loading" });
-    // 이 요청 건의 평가(값·등급용) + 최근 평가 20건(카드 추이선용, 계정 전체 기준 —
-    // Turing API가 "프로젝트" 단위 필터를 지원하지 않음) 을 함께 조회.
-    Promise.all([
-      fetchTuringEvaluations({ job_id: jobId, page: 1, size: 1 }),
-      fetchTuringEvaluations({ page: 1, size: 20 }).catch(() => null),
-    ])
-      .then(([res, trendRes]) => {
-        if (cancelled) return;
-        const item = res.items?.[0];
-        if (!item) {
-          setState({ status: "empty" });
-          return;
-        }
-        setState({
-          status: "ready",
-          cards: buildAiMetricCards(item.metrics, trendRes?.items ?? undefined),
-        });
-      })
-      .catch((e) => {
-        if (!cancelled)
-          setState({
-            status: "error",
-            message: e instanceof Error ? e.message : "조회 실패",
-          });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [jobId]);
-
-  if (state.status === "loading") {
-    return <div className="p-8 text-center text-sm text-[#56607a]">불러오는 중...</div>;
-  }
-  if (state.status === "no-key") {
-    return (
-      <div className="rounded-[12px] border border-[#eaecf3] bg-[#fbfcff] p-8 text-center text-sm text-[#56607a]">
-        Turing API 키가 설정되지 않아 AI 성능 지표를 불러올 수 없습니다.
-        (VITE_TURING_API_KEY)
-      </div>
-    );
-  }
-  if (state.status === "error") {
-    return (
-      <div className="rounded-[12px] border border-red-200 bg-red-50 p-8 text-center text-sm text-red-700">
-        {state.message}
-      </div>
-    );
-  }
-  if (state.status === "empty") {
-    return (
-      <div className="rounded-[12px] border border-[#eaecf3] bg-[#fbfcff] p-8 text-center text-sm text-[#56607a]">
-        이 요청에 대한 AI 성능 평가 데이터가 없습니다.
-      </div>
-    );
-  }
-  return <AiMetricsPanel cards={state.cards} />;
-}
 
 /** Figma "S/O/A/P" 요약 카드 — 두 색을 번갈아 씀 */
 function SummaryCard({
@@ -318,7 +240,6 @@ export function HistoryDetail() {
   const [detail, setDetail] = useState<RequestDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"summary" | "metrics">("summary");
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [healthRefreshing, setHealthRefreshing] = useState(false);
 
@@ -463,34 +384,7 @@ export function HistoryDetail() {
       <div className="-mx-4 h-2 bg-[#f5f6f9] sm:-mx-6 lg:-mx-8" />
 
       <div className="flex flex-col gap-7 py-7">
-        <div className="flex items-center gap-6">
-          <button
-            type="button"
-            onClick={() => setTab("summary")}
-            className={`flex items-center justify-center pb-2 text-[16px] font-bold tracking-[-0.02em] ${
-              tab === "summary"
-                ? "border-b-2 border-[#04044a] text-black"
-                : "text-[#97a0b8]"
-            }`}
-          >
-            요약 및 기록
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("metrics")}
-            className={`flex items-center justify-center pb-2 text-[16px] font-medium tracking-[-0.02em] ${
-              tab === "metrics"
-                ? "border-b-2 border-[#04044a] text-black"
-                : "text-[#97a0b8]"
-            }`}
-          >
-            AI 성능 지표
-          </button>
-        </div>
-
-        {tab === "metrics" ? (
-          <AiMetricsTab jobId={jobId} />
-        ) : isError ? (
+        {isError ? (
           <ErrorDetail detail={detail} />
         ) : (
           <>

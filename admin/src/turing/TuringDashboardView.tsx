@@ -1,29 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
+import { AiMetricsPanel } from "../components/AiMetricsPanel";
+import { averageMetricsApi, buildAiMetricCards } from "./aiMetricCards";
 import { HeptagonRadar } from "./HeptagonRadar";
 import {
-  gradeMetricBySlug,
   higherRatioToRadius01,
   lowerRatioToRadius01,
-  metricThresholdLegendBySlug,
   sttVelocityRatioToRadius01,
   summarizationVelocityToRadius01,
   type MetricTier,
 } from "./metricGrades";
+import { type MetricTrendPoint } from "./TuringMetricCard";
 import {
-  TuringMetricGrid,
-  TuringMetricsStack,
-  type MetricTrendPoint,
-  type TuringMetricGridItem,
-} from "./TuringMetricCard";
-import { formatMetricValue } from "./turingFormat";
-import {
-  CS_DETAIL_METRICS,
   TURING_EVALUATIONS_PAGE_SIZE,
   VELOCITY_METRIC_DESCRIPTIONS,
 } from "./turingConfig";
-import { getDetailMetricsForDomain, getTuringLabelSet } from "./turingLabels";
+import { getTuringLabelSet } from "./turingLabels";
 import { getTuringDomain } from "../auth";
 import { TuringLineChart } from "./TuringLineChart";
 import {
@@ -83,18 +76,6 @@ const SAMP = {
 } as const;
 
 const PER_CASE_COMPOSITE_FALLBACK = [63, 61, 66, 64, 62, 63, 67, 65, 64, 66];
-
-/** 엑셀에서 하늘색으로 표시된 CS 도메인 특화 지표 slug (카드 하늘색 강조 대상) */
-const CS_SPECIAL_SLUGS = new Set([
-  "CKM",
-  "CKD",
-  "CIR",
-  "KCR",
-  "IDR",
-  "AC",
-  "RRS",
-  "CSR_TURN",
-]);
 
 /**
  * 목업 데모 데이터. 등급 분포 의도: 대부분 우수 / 약 1/3 보통 / 미흡은 HR 단 하나.
@@ -457,42 +438,18 @@ export function TuringDashboardView({
   // 라벨/설명/Summary 섹션 표기가 도메인별로 갈린다. 슬러그·등급 로직은 공통.
   const domain = useMemo(() => getTuringDomain(), []);
   const labels = useMemo(() => getTuringLabelSet(domain), [domain]);
-  const csDetailMetricsForDomain = useMemo(
-    () => getDetailMetricsForDomain(domain, CS_DETAIL_METRICS),
-    [domain]
-  );
 
-  // CS 도메인 상세 지표(엑셀 v0.2) — 전체 표시, CS 특화(하늘색)는 카드에서 강조.
-  const csDetailItems = useMemo<TuringMetricGridItem[]>(
-    () =>
-      csDetailMetricsForDomain.map((m) => {
-        const raw = m.read(demo);
-        const unsupported = raw === null;
-        const tier: MetricTier | "neutral" =
-          raw == null ? "neutral" : gradeMetricBySlug(m.slug, raw);
-        const trendSeries = m.trend
-          ? (m.trend.group === "stt"
-              ? sttMetricTrendSeries
-              : summaryMetricTrendSeries)[m.trend.index] ?? []
-          : [];
-        return {
-          key: `${m.group}-${m.slug}`,
-          groupMeta: m.group,
-          metricSlug: m.slug,
-          title: m.label,
-          description: m.description,
-          tier,
-          displayValue: formatMetricValue(raw, m.rowFormat),
-          thumbPosition01: raw == null ? null : Math.min(1, Math.max(0, raw)),
-          rowFormat: m.rowFormat,
-          thresholdLegendRows: metricThresholdLegendBySlug(m.slug),
-          unsupported,
-          trendSeries,
-          csSpecial: CS_SPECIAL_SLUGS.has(m.slug),
-        };
-      }),
-    [csDetailMetricsForDomain, demo, sttMetricTrendSeries, summaryMetricTrendSeries]
-  );
+  // "AI 성능 지표" 디자인(카드 레이아웃)에 쓸 실데이터 — 계정 최근 평가(items) 평균을
+  // 대표값으로, items 전체를 추이선으로 씀. items가 비어 있으면(키 없음/평가 없음)
+  // 빈 배열 → AiMetricsPanel이 emptyMessage로 정직하게 안내.
+  const aiMetricCards = useMemo(() => {
+    if (items.length === 0) return [];
+    const avg = averageMetricsApi(items);
+    if (!avg) return [];
+    return buildAiMetricCards(avg, items, {
+      highlightDomainSpecific: domain === "cnt",
+    });
+  }, [items, domain]);
 
   const sttTiers = tiersForSttRadarNullable({
     sttVelocityRatio: demo.stt.velocityRatio,
@@ -596,98 +553,62 @@ export function TuringDashboardView({
     <div className={loading ? "opacity-60" : ""}>
       <PageHeader title={pageTitle} subtitle={pageSubtitle} />
 
-      <section className="mb-10">
-        <TuringSectionTitle title="Velocity" />
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <VelocityGauge
-            variant="processing"
-            title="Processing Velocity"
-            metricDescription={VELOCITY_METRIC_DESCRIPTIONS.processing}
-            value01={demo.processingVelocity01}
+      {detailLayout === "cards" ? (
+        <section>
+          <TuringSectionTitle title="AI 성능 지표" />
+          <AiMetricsPanel
+            cards={aiMetricCards}
+            emptyMessage="최근 평가 데이터가 없습니다. (Turing API 키 설정을 확인해 주세요)"
           />
-          <VelocityGauge
-            variant="stt"
-            title="STT Velocity"
-            metricDescription={VELOCITY_METRIC_DESCRIPTIONS.stt}
-            value01={demo.stt.velocityRatio}
-          />
-          <SummarizationVelocitySlot value={demo.summary.summarizationVelocity01} />
-        </div>
-      </section>
-
-      <section>
-        <TuringSectionTitle title="Detailed Metrics" />
-        {detailLayout === "radar" ? (
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <HeptagonRadar
-              title="STT"
-              values={sttDetailValues}
-              chartRadii={sttDetailRadii}
-              chartLabels={sttDetailChartLabels}
-              listLabels={sttDetailListLabels}
-              metricDescriptions={sttDetailDescriptions}
-              tiers={sttDetailTiers}
-              rowFormats={sttDetailRowFormats}
-            />
-            <HeptagonRadar
-              title={labels.summarySectionTitle}
-              values={summaryDetailValues}
-              chartRadii={summaryDetailRadii}
-              chartLabels={summaryDetailChartLabels}
-              listLabels={summaryDetailListLabels}
-              metricDescriptions={summaryDetailDescriptions}
-              tiers={summaryDetailTiers}
-              rowFormats={summaryDetailRowFormats}
-            />
-          </div>
-        ) : domain === "hippo" ? (
-          // hippo 도메인 — main 브랜치 시절 카드 레이아웃(STT/Summary 두 컬럼 스택).
-          // CS 특화 5종(KCR/IDR/AC/RRS/CSR Turn)은 의료 도메인에 해당 없으므로 노출하지 않는다.
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <TuringMetricsStack
-              heading="STT"
-              metaPrefix="STT"
-              slugs={sttDetailSlugs}
-              listLabels={sttDetailListLabels}
-              descriptions={sttDetailDescriptions}
-              legendSource="stt"
-              values={sttDetailValues}
-              tiers={sttDetailTiers}
-              rowFormats={sttDetailRowFormats}
-              trendSeriesByMetric={sttDetailTrendSeries}
-            />
-            <TuringMetricsStack
-              heading={labels.summarySectionTitle}
-              metaPrefix="SUMMARY"
-              slugs={summaryDetailSlugs}
-              listLabels={summaryDetailListLabels}
-              descriptions={summaryDetailDescriptions}
-              legendSource="summary"
-              values={summaryDetailValues}
-              tiers={summaryDetailTiers}
-              rowFormats={summaryDetailRowFormats}
-              trendSeriesByMetric={summaryDetailTrendSeries}
-            />
-          </div>
-        ) : (
-          <>
-            <div className="mb-4 flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50/70 px-3 py-2 text-xs text-brand-navy">
-              <span
-                className="h-3 w-3 shrink-0 rounded-sm bg-sky-200 ring-1 ring-sky-300"
-                aria-hidden
+        </section>
+      ) : (
+        <>
+          <section className="mb-10">
+            <TuringSectionTitle title="Velocity" />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <VelocityGauge
+                variant="processing"
+                title="Processing Velocity"
+                metricDescription={VELOCITY_METRIC_DESCRIPTIONS.processing}
+                value01={demo.processingVelocity01}
               />
-              <span>
-                하늘색으로 표시된 항목은{" "}
-                <strong className="font-semibold text-sky-700">
-                  CS 도메인 특화 지표
-                </strong>
-                입니다.
-              </span>
+              <VelocityGauge
+                variant="stt"
+                title="STT Velocity"
+                metricDescription={VELOCITY_METRIC_DESCRIPTIONS.stt}
+                value01={demo.stt.velocityRatio}
+              />
+              <SummarizationVelocitySlot value={demo.summary.summarizationVelocity01} />
             </div>
-            <TuringMetricGrid items={csDetailItems} />
-          </>
-        )}
-      </section>
+          </section>
+
+          <section>
+            <TuringSectionTitle title="Detailed Metrics" />
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <HeptagonRadar
+                title="STT"
+                values={sttDetailValues}
+                chartRadii={sttDetailRadii}
+                chartLabels={sttDetailChartLabels}
+                listLabels={sttDetailListLabels}
+                metricDescriptions={sttDetailDescriptions}
+                tiers={sttDetailTiers}
+                rowFormats={sttDetailRowFormats}
+              />
+              <HeptagonRadar
+                title={labels.summarySectionTitle}
+                values={summaryDetailValues}
+                chartRadii={summaryDetailRadii}
+                chartLabels={summaryDetailChartLabels}
+                listLabels={summaryDetailListLabels}
+                metricDescriptions={summaryDetailDescriptions}
+                tiers={summaryDetailTiers}
+                rowFormats={summaryDetailRowFormats}
+              />
+            </div>
+          </section>
+        </>
+      )}
 
       <section className="mt-10">
         <TuringSectionTitle title="Trend" />
