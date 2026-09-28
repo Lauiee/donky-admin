@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { AiMetricsPanel } from "../components/AiMetricsPanel";
-import { averageMetricsApi, buildAiMetricCards } from "./aiMetricCards";
+import { buildAiMetricCards } from "./aiMetricCards";
+import type { MetricsApi } from "./turingApi";
 import { HeptagonRadar } from "./HeptagonRadar";
 import {
   higherRatioToRadius01,
@@ -439,17 +440,43 @@ export function TuringDashboardView({
   const domain = useMemo(() => getTuringDomain(), []);
   const labels = useMemo(() => getTuringLabelSet(domain), [domain]);
 
-  // "AI 성능 지표" 디자인(카드 레이아웃)에 쓸 실데이터 — 계정 최근 평가(items) 평균을
-  // 대표값으로, items 전체를 추이선으로 씀. items가 비어 있으면(키 없음/평가 없음)
-  // 빈 배열 → AiMetricsPanel이 emptyMessage로 정직하게 안내.
-  const aiMetricCards = useMemo(() => {
-    if (items.length === 0) return [];
-    const avg = averageMetricsApi(items);
-    if (!avg) return [];
-    return buildAiMetricCards(avg, items, {
-      highlightDomainSpecific: domain === "cnt",
-    });
-  }, [items, domain]);
+  // "AI 성능 지표" 디자인(카드 레이아웃)에 쓸 값 — 이 페이지가 이미 쓰던 `demo`
+  // (실제 API 데이터가 있으면 그 값, 없으면 기존 폴백 샘플값 — 다른 섹션과 동일한
+  // 데이터 소스)를 그대로 카드 값·등급에 씀. 디자인만 바꾸고 데이터 로직은 그대로.
+  const metricsFromDemo: MetricsApi = useMemo(
+    () => ({
+      processing_velocity: demo.processingVelocity01,
+      stt: {
+        stt_velocity: demo.stt.velocityRatio,
+        uer: demo.stt.uer,
+        pii_protection: demo.stt.piiProtection,
+        mmr: demo.stt.mmr,
+        mdr: demo.stt.mdr,
+        diarization_accuracy: demo.stt.diarizationAccuracy,
+        redundancy_ratio: demo.stt.redundancyRatio,
+      },
+      summary: {
+        summarization_velocity: demo.summary.summarizationVelocity01,
+        hallucination_ratio: demo.summary.hallucinationRatio,
+        ssr: demo.summary.ssr,
+        icr: demo.summary.icr,
+        mir: demo.summary.mir,
+        summary_mdr: demo.summary.summaryMdr,
+        ssa: demo.summary.ssa,
+      },
+    }),
+    [demo]
+  );
+
+  // 추이선은 실제 평가 목록(items)이 있을 때만 — 폴백 시엔 카드가 평평한
+  // 기준선으로 알아서 대체 표시.
+  const aiMetricCards = useMemo(
+    () =>
+      buildAiMetricCards(metricsFromDemo, items.length ? items : undefined, {
+        highlightDomainSpecific: domain === "cnt",
+      }),
+    [metricsFromDemo, items, domain]
+  );
 
   const sttTiers = tiersForSttRadarNullable({
     sttVelocityRatio: demo.stt.velocityRatio,
