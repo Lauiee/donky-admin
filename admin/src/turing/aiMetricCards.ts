@@ -5,8 +5,16 @@ import {
   gradeSttVelocityRatio,
   gradeSummarizationVelocity,
   velocityRawToDisplayScorePct,
+  METRIC_SPECS,
+  VELOCITY_GAUGE,
   type MetricTier,
 } from "./metricGrades";
+
+/** PII_PROTECTION은 METRIC_SPECS에 없음(gradeMetricBySlug 기본값이 높을수록 좋음으로 처리) */
+function isLowerIsBetter(slug: string): boolean {
+  const spec = METRIC_SPECS[slug];
+  return spec?.dir === "lower" || spec?.dir === "lowerNoPoor";
+}
 
 export type AiMetricGroup = "PERFORMANCE" | "STT" | "SUMMARY";
 
@@ -31,6 +39,11 @@ export interface AiMetricCardData {
   series?: AiMetricSeriesPoint[];
   /** CS(상담) 도메인 특화 지표 강조 — buildAiMetricCards의 highlightDomainSpecific 참고 */
   highlight?: boolean;
+  /**
+   * 원본 지표가 "낮을수록 좋음"이라 표시값을 역수(100 − 원본값%)로 뒤집었는지.
+   * true면 카드에 "값이 높을수록 좋음"으로 통일해서 보여주되, 원래는 반대 방향인 지표라는 뜻.
+   */
+  lowerIsBetter?: boolean;
 }
 
 /**
@@ -48,8 +61,13 @@ type MetricDef = {
   read: (m: MetricsApi) => number | null;
   toDisplay: (raw: number) => number;
   toGrade: (raw: number) => MetricTier;
+  lowerIsBetter: boolean;
 };
 
+/**
+ * raw(0~1)를 백분율 표시값으로. 원본이 "낮을수록 좋음"이면 역수(100 − raw%)로
+ * 뒤집어서, 이 카드 세트 전체가 "값이 높을수록 좋음"으로 통일되게 함.
+ */
 function ratioDef(
   group: AiMetricGroup,
   label: string,
@@ -57,17 +75,23 @@ function ratioDef(
   slug: string,
   read: (m: MetricsApi) => number | null
 ): MetricDef {
+  const lowerIsBetter = isLowerIsBetter(slug);
   return {
     group,
     slug,
     label,
     description,
     read,
-    toDisplay: (raw) => Math.round(raw * 1000) / 10,
+    toDisplay: (raw) => {
+      const pct = lowerIsBetter ? (1 - raw) * 100 : raw * 100;
+      return Math.round(pct * 10) / 10;
+    },
     toGrade: (raw) => gradeMetricBySlug(slug, raw),
+    lowerIsBetter,
   };
 }
 
+/** velocityRawToDisplayScorePct가 이미 역수(100 − raw%)라 항상 "높을수록 좋음" */
 function velocityDef(
   group: AiMetricGroup,
   slug: string,
@@ -84,6 +108,7 @@ function velocityDef(
     read,
     toDisplay: velocityRawToDisplayScorePct,
     toGrade,
+    lowerIsBetter: true,
   };
 }
 
@@ -205,6 +230,72 @@ const METRIC_DEFS: MetricDef[] = [
   ),
 ];
 
+function pct(n: number): string {
+  return `${Math.round(n * 1000) / 10}%`;
+}
+
+/**
+ * 카드에 실제로 보이는 "표시값(역수 반영 후 %)" 기준의 등급 임계 범례.
+ * metricThresholdLegendBySlug(metricGrades.ts)는 원본(raw) 기준이라, 역수로
+ * 뒤집은 지표엔 그대로 못 씀 — 같은 METRIC_SPECS를 표시 스케일로 다시 계산.
+ */
+export function buildDisplayLegend(
+  slug: string
+): { tier: MetricTier; condition: string }[] {
+  const velocityKey =
+    slug === "PROCESSING_VELOCITY"
+      ? "processing"
+      : slug === "STT_VELOCITY"
+        ? "stt"
+        : slug === "SUMMARY_VELOCITY"
+          ? "summarization"
+          : null;
+  if (velocityKey) {
+    const { excellentLt, mediumLt } = VELOCITY_GAUGE[velocityKey];
+    const ex = 1 - excellentLt;
+    const md = 1 - mediumLt;
+    return [
+      { tier: "excellent", condition: `${pct(ex)} 초과` },
+      { tier: "medium", condition: `${pct(md)} 초과 ~ ${pct(ex)} 이하` },
+      { tier: "poor", condition: `${pct(md)} 이하` },
+    ];
+  }
+
+  const spec = METRIC_SPECS[slug];
+  if (!spec) {
+    // PII_PROTECTION 등 spec 없는 지표 — gradeMetricBySlug 기본값과 동일(0.5/0.25, 높을수록 좋음)
+    return [
+      { tier: "excellent", condition: `${pct(0.5)} 초과` },
+      { tier: "medium", condition: `${pct(0.25)} 초과 ~ ${pct(0.5)} 이하` },
+      { tier: "poor", condition: `${pct(0.25)} 이하` },
+    ];
+  }
+  if (spec.dir === "higher") {
+    return [
+      { tier: "excellent", condition: `${pct(spec.ex)} 초과` },
+      { tier: "medium", condition: `${pct(spec.md)} 초과 ~ ${pct(spec.ex)} 이하` },
+      { tier: "poor", condition: `${pct(spec.md)} 이하` },
+    ];
+  }
+  if (spec.dir === "lower") {
+    const exDisp = 1 - spec.ex;
+    const mdDisp = 1 - spec.md;
+    return [
+      { tier: "excellent", condition: `${pct(exDisp)} 초과` },
+      { tier: "medium", condition: `${pct(mdDisp)} 초과 ~ ${pct(exDisp)} 이하` },
+      { tier: "poor", condition: `${pct(mdDisp)} 이하` },
+    ];
+  }
+  if (spec.dir === "lowerNoPoor") {
+    const exDisp = 1 - spec.ex;
+    return [
+      { tier: "excellent", condition: `${pct(exDisp)} 초과` },
+      { tier: "medium", condition: `${pct(exDisp)} 이하` },
+    ];
+  }
+  return [];
+}
+
 function shortDateLabel(iso: string): string {
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
   if (m) return `${m[2]}/${m[3]}`;
@@ -272,6 +363,7 @@ export function buildAiMetricCards(
         opts?.highlightDomainSpecific && DOMAIN_SPECIAL_SLUGS.has(def.slug)
           ? true
           : undefined,
+      lowerIsBetter: def.lowerIsBetter,
     };
     return [card];
   });

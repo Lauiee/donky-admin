@@ -1,5 +1,9 @@
-import { useId } from "react";
-import type { AiMetricCardData, AiMetricSeriesPoint } from "../turing/aiMetricCards";
+import { useId, useState } from "react";
+import {
+  buildDisplayLegend,
+  type AiMetricCardData,
+  type AiMetricSeriesPoint,
+} from "../turing/aiMetricCards";
 import { TIER_LABEL, type MetricTier } from "../turing/metricGrades";
 
 /** "AI 성능 지표" 카드 스타일 — 4가지 중 하나. 고객사별로 고정 설정(파라미터) — 사용자가 토글하는 값이 아님. */
@@ -189,6 +193,31 @@ function TrendSpark({
   );
 }
 
+/** 등급 임계값 범례 + (역수 표시 지표면) 안내 문구 — 구 Turing 카드의 "펼쳐서 자세히 보기"에 대응 */
+function ExpandedDetail({ slug, lowerIsBetter }: { slug: string; lowerIsBetter?: boolean }) {
+  const rows = buildDisplayLegend(slug);
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-[#eaecf3] pt-2">
+      {rows.map((r) => {
+        const s = GRADE_STYLE[r.tier];
+        return (
+          <div key={r.tier} className="flex items-center gap-2 text-[11px]">
+            <span className={`size-[6px] shrink-0 rounded-full ${s.dot}`} />
+            <span className={`w-8 shrink-0 font-semibold ${s.text}`}>{TIER_LABEL[r.tier]}</span>
+            <span className="text-[#56607a]">{r.condition}</span>
+          </div>
+        );
+      })}
+      {lowerIsBetter && (
+        <p className="text-[10px] leading-4 text-[#97a0b8]">
+          이 지표는 원래 낮을수록 좋아서, 화면엔 보기 쉽게 역수(100 − 원본값%)로
+          표시했습니다. 그래도 값이 높을수록 좋습니다.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function AiMetricCard({
   data,
   variant,
@@ -196,14 +225,25 @@ export function AiMetricCard({
   data: AiMetricCardData;
   variant: AiMetricCardVariant;
 }) {
-  const { group, label, description, value, grade, series, highlight } = data;
+  const [expanded, setExpanded] = useState(false);
+  const { group, slug, label, description, value, grade, series, highlight, lowerIsBetter } =
+    data;
   if (value == null || grade == null) return null;
-  const chartHeight = variant === "areaBig" ? 56 : variant === "line" ? 40 : 28;
-  const chartBig = variant === "areaBig" || variant === "line";
+  const chartHeight = expanded ? 64 : variant === "areaBig" ? 56 : variant === "line" ? 40 : 28;
+  const chartBig = expanded || variant === "areaBig" || variant === "line";
 
   return (
     <div
-      className={`flex min-w-0 flex-1 flex-col gap-2 overflow-hidden rounded-[12px] border p-[13px] ${
+      role="button"
+      tabIndex={0}
+      onClick={() => setExpanded((v) => !v)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setExpanded((v) => !v);
+        }
+      }}
+      className={`flex min-w-0 flex-1 cursor-pointer flex-col gap-2 overflow-hidden rounded-[12px] border p-[13px] transition-shadow hover:shadow-md ${
         highlight
           ? "border-sky-300 bg-sky-50/60 ring-1 ring-sky-200"
           : "border-[#eaecf3] bg-white"
@@ -238,7 +278,7 @@ export function AiMetricCard({
         </div>
       ) : (
         <>
-          <p className="text-[24px] font-bold leading-6 text-[#0e1220]">{value}</p>
+          <p className="text-[24px] font-bold leading-6 text-[#0e1220]">{value}%</p>
           {series && series.length >= 2 ? (
             <TrendSpark
               series={series}
@@ -252,6 +292,8 @@ export function AiMetricCard({
           )}
         </>
       )}
+
+      {expanded && <ExpandedDetail slug={slug} lowerIsBetter={lowerIsBetter} />}
     </div>
   );
 }
