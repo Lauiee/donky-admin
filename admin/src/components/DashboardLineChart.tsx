@@ -5,6 +5,29 @@ export type DailyCountPoint = { date: string; count: number };
 /** 좌우 패딩 동일 — 라벨 열과 선 끝점이 시각적으로 맞도록 */
 const VB = { W: 1000, H: 340, padL: 36, padR: 36, padT: 24, padB: 52 };
 
+/**
+ * Catmull-Rom → Cubic Bezier — 점들을 지나는 부드러운 곡선.
+ * Figma 목업 차트가 꺾은선이 아니라 부드러운 곡선이라, 실제 데이터로 그릴 때도
+ * 같은 느낌을 내기 위해 직선(M/L) 대신 이 보간을 씀.
+ */
+function smoothPathD(pts: { x: number; y: number }[]): string {
+  if (pts.length === 0) return "";
+  if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+  let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] ?? p2;
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)} ${cp2x.toFixed(2)} ${cp2y.toFixed(2)} ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+  }
+  return d;
+}
+
 function buildPaths(data: DailyCountPoint[]) {
   const n = data.length;
   if (n === 0) {
@@ -41,15 +64,13 @@ function buildPaths(data: DailyCountPoint[]) {
     count: d.count,
   }));
 
-  const lineD = points
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`)
-    .join(" ");
+  const lineD = smoothPathD(points);
 
   const areaD =
     points.length > 0
-      ? `M ${points[0].x} ${baseY} ${points
-          .map((p) => `L ${p.x} ${p.y}`)
-          .join(" ")} L ${points[points.length - 1].x} ${baseY} Z`
+      ? `M ${points[0].x} ${baseY} L ${points[0].x} ${points[0].y} ${smoothPathD(
+          points
+        ).replace(/^M[^C]*/, "")} L ${points[points.length - 1].x} ${baseY} Z`
       : "";
 
   return { lineD, areaD, points, max: maxCount };
@@ -143,6 +164,14 @@ export function DashboardLineChart({ data }: { data: DailyCountPoint[] }) {
         onPointerEnter={(e) => onPointer(e.clientX, e.clientY)}
         onPointerDown={(e) => onPointer(e.clientX, e.clientY)}
       >
+        <defs>
+          {/* Figma 원본과 동일한 세로 그라데이션 — 위(진한 틸) → 아래(20% 틸) */}
+          <linearGradient id="dashboardAreaFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#40E0D0" stopOpacity={1} />
+            <stop offset="100%" stopColor="#40E0D0" stopOpacity={0.2} />
+          </linearGradient>
+        </defs>
+
         {/* faint grid */}
         {[0.25, 0.5, 0.75].map((t) => {
           const y = VB.padT + (VB.H - VB.padT - VB.padB) * (1 - t);
@@ -164,16 +193,15 @@ export function DashboardLineChart({ data }: { data: DailyCountPoint[] }) {
         <path
           ref={areaRef}
           d={areaD}
-          fill="#0a2465"
-          fillOpacity={0.07}
+          fill="url(#dashboardAreaFill)"
         />
 
         <path
           ref={lineRef}
           d={lineD}
           fill="none"
-          stroke="#0a2465"
-          strokeWidth={2.5}
+          stroke="#40E0D0"
+          strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -187,7 +215,7 @@ export function DashboardLineChart({ data }: { data: DailyCountPoint[] }) {
                 cy={p.y}
                 r={isH ? 9 : 6}
                 fill="white"
-                stroke="#0a2465"
+                stroke="#40E0D0"
                 strokeWidth={isH ? 2.5 : 2}
                 className="transition-all duration-200 ease-out"
               />
@@ -195,7 +223,7 @@ export function DashboardLineChart({ data }: { data: DailyCountPoint[] }) {
                 cx={p.x}
                 cy={p.y}
                 r={isH ? 3.5 : 2.5}
-                fill="#5b6b95"
+                fill="#40E0D0"
                 className="pointer-events-none transition-all duration-200"
               />
             </g>
@@ -208,8 +236,8 @@ export function DashboardLineChart({ data }: { data: DailyCountPoint[] }) {
             y1={VB.padT}
             x2={points[hoverIndex].x}
             y2={VB.H - VB.padB}
-            stroke="#0a2465"
-            strokeOpacity={0.12}
+            stroke="#40E0D0"
+            strokeOpacity={0.35}
             strokeWidth={1.5}
             strokeDasharray="4 6"
           />

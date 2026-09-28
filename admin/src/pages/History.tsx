@@ -2,14 +2,25 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { ProjectSelect } from "../components/ProjectSelect";
+import { ServerStatusBadge } from "../components/ServerStatusBadge";
 import {
   getCnttRequestsList,
+  getHealthCheck,
   getProjects,
   getRequestsList,
+  type HealthStatus,
   type ProjectItem,
   type RequestItem,
 } from "../api";
 import { getSummaryType } from "../auth";
+import iconChevronDown from "../assets/dashboard/icon2.svg";
+import iconDivider from "../assets/dashboard/line2.svg";
+import iconSearch from "../assets/dashboard/history-search.svg";
+import iconDetail from "../assets/dashboard/history-chevron.svg";
+import iconGood from "../assets/dashboard/history-badge-good.svg";
+import iconMedium from "../assets/dashboard/history-badge-medium.svg";
+import iconPoor from "../assets/dashboard/history-badge-poor.svg";
+import iconErrorBadge from "../assets/dashboard/history-badge-error.svg";
 
 const PAGE_SIZE = 20;
 
@@ -38,15 +49,62 @@ function statusLabel(s: string) {
   return map[s] ?? s;
 }
 
-function statusColor(s: string) {
-  const map: Record<string, string> = {
-    completed: "bg-brand-accent/20 text-brand-navy",
-    processing: "bg-amber-100 text-amber-800",
-    pending: "bg-brand-surface text-brand-navy",
-    error: "bg-red-100 text-red-800",
-    failed: "bg-red-100 text-red-800",
+/**
+ * Figma 뱃지 톤 매핑 — Figma 원본은 STT 품질 등급(우수/보통/미흡/오류) 배지였지만,
+ * 이 목록은 요청 처리 상태(완료/처리 중/대기/오류) 데이터라 라벨은 그대로 두고
+ * 색·아이콘 스타일만 가장 가까운 톤으로 옮김: 완료→teal, 처리 중/대기→yellow, 오류→red.
+ */
+function statusBadgeStyle(s: string): { bg: string; text: string; icon: string } {
+  const map: Record<string, { bg: string; text: string; icon: string }> = {
+    completed: { bg: "bg-[rgba(64,224,208,0.2)]", text: "text-black", icon: iconGood },
+    processing: { bg: "bg-[#fdf3df]", text: "text-[#d98f16]", icon: iconMedium },
+    pending: { bg: "bg-[#fdf3df]", text: "text-[#d98f16]", icon: iconMedium },
+    error: { bg: "bg-[#fbe6e6]", text: "text-[#f13e3e]", icon: iconPoor },
+    failed: { bg: "bg-[#fbe6e6]", text: "text-[#f13e3e]", icon: iconPoor },
   };
-  return map[s] ?? "bg-brand-surface text-brand-navy";
+  return (
+    map[s] ?? { bg: "bg-[#f1e8ff]", text: "text-[#6600ff]", icon: iconErrorBadge }
+  );
+}
+
+/** Figma "프로젝트 | 전체 ⌄" 스타일의 단순 필터 드롭다운 (상태 필터 전용) */
+function FlatFilter<T extends string>({
+  label,
+  value,
+  valueLabel,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  valueLabel: string;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="inline-flex h-[34px] shrink-0 items-center gap-2 rounded-lg border border-[#d4d8e8] bg-white px-3 py-1.5">
+      <span className="whitespace-nowrap text-[12px] leading-4 text-[#39435a]">
+        {label}
+      </span>
+      <img src={iconDivider} alt="" className="h-3 w-px" />
+      <span className="relative whitespace-nowrap text-[12px] font-medium leading-4 text-black">
+        {valueLabel}
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value as T)}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          aria-label={label}
+        >
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </span>
+      <img src={iconChevronDown} alt="" className="h-5 w-5" />
+    </div>
+  );
 }
 
 export function History() {
@@ -66,6 +124,8 @@ export function History() {
   const [error, setError] = useState<string | null>(null);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [selectedProject, setSelectedProject] = useState(projectFromUrl);
+  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [healthRefreshing, setHealthRefreshing] = useState(false);
 
   // project id → name lookup (used for CNTT brand column)
   const projectMap: Record<string, string> = {};
@@ -85,6 +145,36 @@ export function History() {
   useEffect(() => {
     setSelectedProject(projectFromUrl);
   }, [projectFromUrl]);
+
+  const refreshHealth = () => {
+    setHealthRefreshing(true);
+    setHealth(null);
+    getHealthCheck()
+      .then((h) => setHealth(h))
+      .catch(() =>
+        setHealth({ ok: false, status: "error", message: "연결 실패" })
+      )
+      .finally(() => setHealthRefreshing(false));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const runCheck = () =>
+      getHealthCheck()
+        .then((h) => {
+          if (!cancelled) setHealth(h);
+        })
+        .catch(() => {
+          if (!cancelled)
+            setHealth({ ok: false, status: "error", message: "연결 실패" });
+        });
+    runCheck();
+    const interval = setInterval(runCheck, 5 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   const handleProjectChange = (value: string) => {
     setSelectedProject(value);
@@ -143,172 +233,174 @@ export function History() {
   const errorStatusValue = isCntt ? "failed" : "error";
 
   return (
-    <div>
+    <div className="pb-4">
       <PageHeader
+        variant="flat"
         title="사용 내역"
-        subtitle="요청·작업 내역을 조회하고 상세 정보로 이동할 수 있습니다."
+        subtitle="요청∙작업 내역을 조회하고 상세 정보를 확인해 보세요."
         actions={
-          projects.length > 0 ? (
+          <ServerStatusBadge
+            health={health}
+            healthRefreshing={healthRefreshing}
+            onRefresh={refreshHealth}
+          />
+        }
+      />
+
+      <div className="-mx-4 h-2 bg-[#f5f6f9] sm:-mx-6 lg:-mx-8" />
+
+      <div className="flex flex-col gap-6 py-7">
+        <div className="flex flex-wrap items-center gap-4">
+          {projects.length > 0 && (
             <ProjectSelect
               value={selectedProject}
               onChange={handleProjectChange}
               projects={projects}
               placeholder="전체 프로젝트"
-              className="shrink-0"
+              variant="flat"
             />
-          ) : null
-        }
-      />
-
-      <div className="admin-toolbar">
-        <h3 className="admin-section-title mb-4">검색 및 필터</h3>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex rounded-full border border-brand-line/90 bg-brand-surface p-0.5 shadow-[inset_0_1px_2px_rgba(10,36,101,0.06)]">
-            {(
-              [
-                { value: "", label: "전체" },
-                { value: "completed", label: "완료" },
-                { value: errorStatusValue, label: "오류" },
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.value || "all"}
-                type="button"
-                onClick={() => {
-                  setStatusFilter(opt.value);
-                  setPage(1);
-                }}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                  statusFilter === opt.value
-                    ? "bg-white text-brand-navy shadow-sm ring-1 ring-black/[0.06]"
-                    : "text-brand-slate hover:text-brand-navy"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          <input
-            type="text"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            placeholder={isCntt ? "의도 검색" : "제목 검색"}
-            className="admin-input flex-1 min-w-[200px]"
-          />
-          <button
-            type="button"
-            onClick={handleSearch}
-            className="admin-btn-secondary"
-          >
-            검색
-          </button>
-          {(searchQuery || statusFilter) && (
-            <span className="text-xs text-brand-slate">
-              {searchQuery ? `"${searchQuery}" ` : ""}
-              {statusFilter === "completed"
-                ? "완료만"
-                : statusFilter
-                ? "오류만"
-                : ""}
-            </span>
           )}
+          <FlatFilter
+            label="상태"
+            value={statusFilter}
+            valueLabel={
+              statusFilter === ""
+                ? "전체"
+                : statusFilter === "completed"
+                  ? "완료"
+                  : "오류"
+            }
+            options={[
+              { value: "", label: "전체" },
+              { value: "completed", label: "완료" },
+              { value: errorStatusValue, label: "오류" },
+            ]}
+            onChange={(v) => {
+              setStatusFilter(v);
+              setPage(1);
+            }}
+          />
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[#d4d8e8] bg-white px-3 py-2">
+            <button
+              type="button"
+              onClick={handleSearch}
+              className="flex h-4 w-4 shrink-0 items-center justify-center"
+              aria-label="검색"
+            >
+              <img src={iconSearch} alt="" className="h-4 w-4" />
+            </button>
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder={isCntt ? "의도 검색..." : "제목 검색..."}
+              className="min-w-0 flex-1 bg-transparent text-[12px] leading-4 text-black outline-none placeholder:text-[#6b7588]"
+            />
+          </div>
         </div>
-      </div>
 
-      {loading ? (
-        <div className="admin-card p-8 text-brand-slate">불러오는 중...</div>
-      ) : error ? (
-        <div className="admin-card p-8 text-red-600">{error}</div>
-      ) : (
-        <>
-          <div className="admin-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-brand-surface text-left text-brand-slate">
-                    <th className="px-5 py-3 font-medium">요청 시각</th>
-                    <th className="px-5 py-3 font-medium">상태</th>
-                    <th className="px-5 py-3 font-medium">처리 시간</th>
-                    {showBrandColumn && (
-                      <th className="px-5 py-3 font-medium">브랜드</th>
-                    )}
-                    <th className="px-5 py-3 font-medium">
-                      {isCntt ? "요청 의도" : "제목"}
-                    </th>
-                    <th className="px-5 py-3 font-medium w-24"> </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={showBrandColumn ? 6 : 5}
-                        className="px-5 py-8 text-center text-brand-slate"
-                      >
-                        요청 내역 없음
-                      </td>
+        {loading ? (
+          <div className="p-8 text-[#56607a]">불러오는 중...</div>
+        ) : error ? (
+          <div className="p-8 text-red-600">{error}</div>
+        ) : (
+          <>
+            <div className="overflow-hidden rounded-[12px] border border-[#e5e7e9]">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="h-12 border-b border-[#e5e7e9] bg-[#fbfcff] text-left text-[16px] tracking-[-0.02em] text-[#56607a]">
+                      <th className="px-4 py-2 font-normal">
+                        {isCntt ? "요청 의도" : "제목"}
+                      </th>
+                      {showBrandColumn && (
+                        <th className="w-[120px] px-4 py-2 font-normal">
+                          브랜드
+                        </th>
+                      )}
+                      <th className="w-[120px] px-4 py-2 font-normal">상태</th>
+                      <th className="w-[120px] px-4 py-2 font-normal">
+                        처리 시간
+                      </th>
+                      <th className="px-4 py-2 font-normal">요청 시각</th>
+                      <th className="w-[106px] px-4 py-2" />
                     </tr>
-                  ) : (
-                    items.map((r) => {
-                      const displayText = isCntt
-                        ? (r.intent ?? r.title ?? "-")
-                        : (r.title ?? "-");
-                      const brandName = showBrandColumn
-                        ? (projectMap[String(r.project_id)] ?? "-")
-                        : null;
-                      return (
-                        <tr
-                          key={r.job_id}
-                          className="border-t border-brand-line/70 hover:bg-brand-surface/80"
+                  </thead>
+                  <tbody>
+                    {items.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={showBrandColumn ? 6 : 5}
+                          className="px-4 py-8 text-center text-[#56607a]"
                         >
-                          <td className="px-5 py-3 text-brand-navy">
-                            {formatDate(r.created_at)}
-                          </td>
-                          <td className="px-5 py-3">
-                            <span
-                              className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${statusColor(
-                                r.status
-                              )}`}
-                            >
-                              {statusLabel(r.status)}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3 text-brand-navy">
-                            {r.processing_sec != null
-                              ? `${r.processing_sec}초`
-                              : "-"}
-                          </td>
-                          {showBrandColumn && (
-                            <td className="px-5 py-3 text-brand-navy">
-                              {brandName}
-                            </td>
-                          )}
-                          <td
-                            className="px-5 py-3 text-brand-navy max-w-[240px] truncate"
-                            title={displayText !== "-" ? displayText : undefined}
+                          요청 내역 없음
+                        </td>
+                      </tr>
+                    ) : (
+                      items.map((r) => {
+                        const displayText = isCntt
+                          ? (r.intent ?? r.title ?? "-")
+                          : (r.title ?? "-");
+                        const brandName = showBrandColumn
+                          ? (projectMap[String(r.project_id)] ?? "-")
+                          : null;
+                        const badge = statusBadgeStyle(r.status);
+                        return (
+                          <tr
+                            key={r.job_id}
+                            className="h-12 border-b border-[#e5e7e9] text-[16px] tracking-[-0.02em] text-black last:border-b-0 hover:bg-[#fbfcff]"
                           >
-                            {displayText}
-                          </td>
-                          <td className="px-5 py-3">
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/history/${r.job_id}`)}
-                              className="px-3 py-1.5 rounded-lg text-sm font-medium text-brand-navy bg-brand-surface hover:bg-brand-line/50"
-                            >
-                              상세
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                            <td className="max-w-[320px] px-4 py-2 font-semibold">
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/history/${r.job_id}`)}
+                                className="block max-w-full truncate text-left hover:underline"
+                                title={displayText !== "-" ? displayText : undefined}
+                              >
+                                {displayText}
+                              </button>
+                            </td>
+                            {showBrandColumn && (
+                              <td className="px-4 py-2">{brandName}</td>
+                            )}
+                            <td className="px-4 py-2">
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-lg py-0.5 pl-1 pr-2 ${badge.bg} ${badge.text}`}
+                              >
+                                <img src={badge.icon} alt="" className="h-5 w-5" />
+                                {statusLabel(r.status)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2">
+                              {r.processing_sec != null
+                                ? `${r.processing_sec}초`
+                                : "-"}
+                            </td>
+                            <td className="px-4 py-2">
+                              {formatDate(r.created_at)}
+                            </td>
+                            <td className="px-4 py-2">
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/history/${r.job_id}`)}
+                                className="inline-flex items-center gap-1 whitespace-nowrap rounded text-[16px] tracking-[-0.02em] hover:underline"
+                              >
+                                자세히 보기
+                                <img src={iconDetail} alt="" className="h-5 w-5" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
             {totalPages > 1 && (
-              <div className="px-5 py-3 border-t border-brand-line/70 flex items-center justify-between">
-                <span className="text-sm text-brand-slate">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-[#56607a]">
                   전체 {total}건 ({(page - 1) * PAGE_SIZE + 1}–
                   {Math.min(page * PAGE_SIZE, total)})
                 </span>
@@ -317,7 +409,7 @@ export function History() {
                     type="button"
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page <= 1}
-                    className="px-3 py-1.5 rounded-lg text-sm font-medium text-brand-navy bg-brand-surface hover:bg-brand-line/50 disabled:opacity-50 disabled:pointer-events-none"
+                    className="rounded-lg bg-[#f5f6f9] px-3 py-1.5 text-sm font-medium text-black hover:bg-[#eaecf3] disabled:pointer-events-none disabled:opacity-50"
                   >
                     이전
                   </button>
@@ -325,16 +417,16 @@ export function History() {
                     type="button"
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page >= totalPages}
-                    className="px-3 py-1.5 rounded-lg text-sm font-medium text-brand-navy bg-brand-surface hover:bg-brand-line/50 disabled:opacity-50 disabled:pointer-events-none"
+                    className="rounded-lg bg-[#f5f6f9] px-3 py-1.5 text-sm font-medium text-black hover:bg-[#eaecf3] disabled:pointer-events-none disabled:opacity-50"
                   >
                     다음
                   </button>
                 </div>
               </div>
             )}
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
