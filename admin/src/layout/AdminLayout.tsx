@@ -13,6 +13,22 @@ import {
   getTokenExpiresAtMs,
   type UserRole,
 } from "../auth";
+import navDashboard from "../assets/dashboard/vector.svg";
+import navUsage from "../assets/dashboard/vector1.svg";
+import navBilling from "../assets/dashboard/vector2.svg";
+import navHistory from "../assets/dashboard/vector3.svg";
+import navInquiry from "../assets/dashboard/vector4.svg";
+import navTuring from "../assets/dashboard/vector5.svg";
+import iconTimer from "../assets/dashboard/vector6.svg";
+import iconLogout from "../assets/dashboard/icon.svg";
+
+function NavIcon({ src }: { src: string }) {
+  return (
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+      <img src={src} alt="" className="h-3.5 w-3.5" />
+    </span>
+  );
+}
 
 const navItems: {
   to: string;
@@ -20,120 +36,15 @@ const navItems: {
   icon: ReactNode;
   disabled?: boolean;
 }[] = [
-  {
-    to: "/dashboard",
-    label: "대시보드",
-    icon: (
-      <svg
-        className="w-5 h-5 shrink-0"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-        />
-      </svg>
-    ),
-  },
-  {
-    to: "/usage",
-    label: "사용량",
-    icon: (
-      <svg
-        className="w-5 h-5 shrink-0"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-        />
-      </svg>
-    ),
-  },
-  {
-    to: "/billing",
-    label: "비용",
-    disabled: true,
-    icon: (
-      <svg
-        className="w-5 h-5 shrink-0"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
-    ),
-  },
-  {
-    to: "/history",
-    label: "사용 내역",
-    icon: (
-      <svg
-        className="w-5 h-5 shrink-0"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M4 6h16M4 10h16M4 14h16M4 18h16"
-        />
-      </svg>
-    ),
-  },
-  {
-    to: "/inquiry",
-    label: "이용 문의",
-    icon: (
-      <svg
-        className="w-5 h-5 shrink-0"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-        />
-      </svg>
-    ),
-  },
+  { to: "/dashboard", label: "대시보드", icon: <NavIcon src={navDashboard} /> },
+  { to: "/usage", label: "사용량", icon: <NavIcon src={navUsage} /> },
+  { to: "/billing", label: "비용", disabled: true, icon: <NavIcon src={navBilling} /> },
+  { to: "/history", label: "사용 내역", icon: <NavIcon src={navHistory} /> },
+  { to: "/inquiry", label: "이용 문의", icon: <NavIcon src={navInquiry} /> },
   {
     to: "/turing",
     label: "Turing",
-    icon: (
-      <svg
-        className="w-5 h-5 shrink-0"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M22 12h-4l-3 9L9 3l-3 9H2"
-        />
-      </svg>
-    ),
+    icon: <NavIcon src={navTuring} />,
   },
 ];
 
@@ -155,6 +66,12 @@ export function AdminLayout() {
   const [role, setRoleState] = useState<UserRole | null>(() => getRole());
   const [remaining, setRemaining] = useState<string>("");
   const [extending, setExtending] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // 페이지 이동하면 모바일 드로어 자동으로 닫기
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (role) return;
@@ -215,12 +132,32 @@ export function AdminLayout() {
   };
 
   return (
-    <div className="font-sans h-screen overflow-hidden bg-transparent flex">
-      <aside className="w-60 h-screen flex shrink-0 flex-col overflow-y-auto rounded-r-3xl border-r border-brand-line/80 bg-white/95 shadow-admin-sidebar backdrop-blur-sm">
-        <div className="flex h-14 items-center border-b border-brand-line/60 bg-gradient-to-r from-brand-violet/[0.06] via-white to-brand-accent/[0.05] px-4">
+    <div className="font-sans h-screen overflow-hidden bg-white flex">
+      {/* 모바일 드로어 배경 — 사이드바 열려 있을 때만, lg 이상에서는 안 씀 */}
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/30 lg:hidden"
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-60 flex shrink-0 flex-col overflow-y-auto border-r border-[#eaecf3] bg-[#fbfcff] transition-transform duration-200 lg:static lg:z-auto lg:h-screen lg:translate-x-0 ${
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex h-[60px] shrink-0 items-center justify-between px-8 py-4">
           <BrandLogo className="text-xl" />
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(false)}
+            className="-mr-2 flex h-8 w-8 items-center justify-center rounded-lg text-[#56607a] lg:hidden"
+            aria-label="메뉴 닫기"
+          >
+            ✕
+          </button>
         </div>
-        <nav className="p-3 flex flex-col gap-1 flex-1">
+        <nav className="flex flex-1 flex-col items-start px-5 pt-3">
           {navItems
             .filter(
               (item) =>
@@ -229,73 +166,93 @@ export function AdminLayout() {
                 item.to === "/turing",
             )
             .filter((item) => !item.disabled || item.to === "/billing")
-            .map(({ to, label, icon, disabled }) =>
-              disabled ? (
-                <span
-                  key={to}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-full text-sm font-medium text-brand-mint cursor-not-allowed opacity-75"
-                >
-                  {icon}
-                  {label}
-                </span>
-              ) : (
+            .map(({ to, label, icon, disabled }) => {
+              const content =
+                to === "/turing" ? (
+                  <span className="flex-1 min-w-0 font-extrabold text-[14px] leading-[18px] text-[#56607a]">
+                    turing<span className="text-brand-accent">.</span>
+                  </span>
+                ) : (
+                  <span className="flex-1 min-w-0 text-[16px] font-medium leading-5 tracking-[-0.02em]">
+                    {label}
+                  </span>
+                );
+              if (disabled) {
+                return (
+                  <span
+                    key={to}
+                    className="flex w-full cursor-not-allowed items-center gap-2 rounded-[12px] p-3 text-[#97a0b8] opacity-75"
+                  >
+                    {icon}
+                    {content}
+                  </span>
+                );
+              }
+              return (
                 <NavLink
                   key={to}
                   to={`${to}${search}`}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2.5 rounded-full text-sm font-medium transition-all ${
+                    `flex w-full items-center gap-2 rounded-[12px] p-3 transition-colors ${
                       isActive
-                        ? "bg-gradient-to-r from-brand-violet to-brand-navy text-white shadow-md shadow-brand-violet/25"
-                        : "border border-transparent text-brand-slate hover:border-brand-line hover:bg-brand-surface"
+                        ? "bg-[#ebf0ff] text-[#04044a]"
+                        : "text-[#56607a] hover:bg-[#f5f6f9]"
                     }`
                   }
                 >
                   {icon}
-                  {label}
+                  {content}
                 </NavLink>
-              ),
-            )}
+              );
+            })}
         </nav>
-        <div className="p-3 border-t border-brand-line/60 space-y-1">
+        <div className="flex shrink-0 flex-col items-start gap-4 border-t border-[#eaecf3] px-8 pb-6 pt-6">
           {remaining && (
-            <>
-              <div className="px-3 py-2 rounded-xl bg-brand-surface text-xs text-brand-slate font-medium">
-                {remaining}
+            <div className="flex w-full flex-col gap-2 rounded-[12px] bg-[#ebf0ff] p-2">
+              <div className="flex w-full items-start gap-1">
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                  <img src={iconTimer} alt="" className="h-3 w-3" />
+                </span>
+                <span className="flex-1 text-[12px] leading-4 tracking-[-0.02em] text-black">
+                  {remaining}
+                </span>
               </div>
               <button
                 type="button"
                 onClick={handleExtend}
                 disabled={extending || remaining === "세션 만료됨"}
-                className="w-full py-2 rounded-xl text-xs font-semibold text-brand-navy hover:bg-brand-accent/15 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+                className="w-full rounded-lg bg-[#04044a] px-2 py-1 text-[12px] font-medium leading-4 tracking-[-0.02em] text-white transition-opacity disabled:opacity-50"
               >
                 {extending ? "연장 중..." : "시간 연장"}
               </button>
-            </>
+            </div>
           )}
           <button
             type="button"
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-full text-sm font-medium text-brand-slate hover:bg-brand-surface hover:text-brand-ink transition-colors"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[16px] font-medium leading-5 tracking-[-0.02em] text-[#56607a] transition-colors hover:text-[#04044a]"
           >
-            <svg
-              className="w-5 h-5 shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              />
-            </svg>
-            로그아웃
+            <span className="flex-1 text-left">로그아웃</span>
+            <img src={iconLogout} alt="" className="h-3.5 w-3.5 shrink-0" />
           </button>
         </div>
       </aside>
-      <main className="min-h-0 flex-1 overflow-auto bg-transparent">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <main className="flex min-h-0 flex-1 flex-col overflow-auto bg-white">
+        {/* 모바일 상단 바 — lg 이상에서는 사이드바가 항상 보이니 필요 없음 */}
+        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-[#eaecf3] bg-white px-4 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(true)}
+            className="flex h-9 w-9 shrink-0 flex-col items-center justify-center gap-1 rounded-lg text-[#56607a] hover:bg-[#f5f6f9]"
+            aria-label="메뉴 열기"
+          >
+            <span className="block h-0.5 w-5 rounded-full bg-current" />
+            <span className="block h-0.5 w-5 rounded-full bg-current" />
+            <span className="block h-0.5 w-5 rounded-full bg-current" />
+          </button>
+          <BrandLogo className="text-lg" />
+        </div>
+        <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
           <Outlet />
         </div>
       </main>
