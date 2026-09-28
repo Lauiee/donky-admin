@@ -472,6 +472,26 @@ export function TuringDashboardView({
   // 지표별 추이(실 API 있으면 실제 값, 없으면 기존 폴백 샘플 곡선) — 배열 순서가
   // buildMetricTrendSeriesFromItems/buildFallbackMetricTrendSeries의 추출 순서와
   // 같아서 그 순서 그대로 slug를 붙여 카드 쪽에 넘긴다.
+  // "전체 처리 속도" 카드용 추이 — sttMetricTrendSeries/summaryMetricTrendSeries와 달리
+  // processing_velocity는 이 페이지에 지표별 추이 배열이 따로 없어서 따로 만듦.
+  // 실 API 있으면 items에서, 없으면 이 파일에 이미 있던(예전엔 안 쓰이던) SAMP.processingVelocity
+  // 샘플을 그대로 씀 — 새 더미값을 만들지 않음.
+  const processingVelocityTrendSeries = useMemo(() => {
+    if (items.length > 0) {
+      const sorted = [...items].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      return sorted.map((it, i) => ({
+        label: trendTimeLabels[i] ?? formatTrendTimeLabel(it.created_at).short,
+        value: it.metrics.processing_velocity,
+      }));
+    }
+    return SAMP.processingVelocity.map((v, i) => ({
+      label: trendTimeLabels[i] ?? "",
+      value: v,
+    }));
+  }, [items, trendTimeLabels]);
+
   const rawSeriesBySlug = useMemo(() => {
     const sttOrder: { group: "PERFORMANCE" | "STT"; slug: string }[] = [
       { group: "PERFORMANCE", slug: "STT_VELOCITY" },
@@ -500,8 +520,12 @@ export function TuringDashboardView({
       const pts = summaryMetricTrendSeries[i];
       if (pts?.length) map[metricDefKey(group, slug)] = pts;
     });
+    if (processingVelocityTrendSeries.length) {
+      map[metricDefKey("PERFORMANCE", "PROCESSING_VELOCITY")] =
+        processingVelocityTrendSeries;
+    }
     return map;
-  }, [sttMetricTrendSeries, summaryMetricTrendSeries]);
+  }, [sttMetricTrendSeries, summaryMetricTrendSeries, processingVelocityTrendSeries]);
 
   const aiMetricCards = useMemo(
     () =>

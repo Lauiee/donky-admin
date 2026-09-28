@@ -117,7 +117,10 @@ function FlatBaseline({
       </defs>
       <path d={`M0 ${height} L0 ${y} L200 ${y} L200 ${height} Z`} fill={`url(#${gradId})`} />
       <line x1="0" y1={y} x2="200" y2={y} stroke={color} strokeWidth={big ? 1.75 : 1.15} />
-      <circle cx="196" cy={y} r={big ? 4 : 3} fill={color} />
+      <circle cx="196" cy={y} r={8} fill="transparent">
+        <title>{`현재값: ${value}%`}</title>
+      </circle>
+      <circle cx="196" cy={y} r={big ? 4 : 3} fill={color} className="pointer-events-none" />
     </svg>
   );
 }
@@ -182,7 +185,20 @@ function TrendSpark({
         </defs>
         <path d={area} fill={`url(#${gradId})`} />
         <path d={line} fill="none" stroke={color} strokeWidth={big ? 1.75 : 1.15} strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx={pts[pts.length - 1].x} cy={pts[pts.length - 1].y} r={big ? 4 : 3} fill={color} />
+        {pts.map((p, i) => (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r={9} fill="transparent">
+              <title>{`${series[i].label}: ${series[i].value}%`}</title>
+            </circle>
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r={i === pts.length - 1 ? (big ? 4 : 3) : big ? 2.5 : 1.75}
+              fill={color}
+              className="pointer-events-none"
+            />
+          </g>
+        ))}
       </svg>
       {showLastLabel && (
         <span className="pointer-events-none absolute right-0 top-0 text-[10px] text-[#97a0b8]">
@@ -193,25 +209,35 @@ function TrendSpark({
   );
 }
 
-/** 등급 임계값 범례 + (역수 표시 지표면) 안내 문구 — 구 Turing 카드의 "펼쳐서 자세히 보기"에 대응 */
-function ExpandedDetail({ slug, lowerIsBetter }: { slug: string; lowerIsBetter?: boolean }) {
+/**
+ * 등급 임계값 범례 — 구 Turing 카드처럼 펼치지 않아도 항상 보임.
+ * (역수 표시 지표는 안내 문구도 함께.)
+ */
+function MetricLegend({ slug, lowerIsBetter }: { slug: string; lowerIsBetter?: boolean }) {
   const rows = buildDisplayLegend(slug);
+  if (rows.length === 0) return null;
   return (
-    <div className="flex flex-col gap-1.5 border-t border-[#eaecf3] pt-2">
-      {rows.map((r) => {
-        const s = GRADE_STYLE[r.tier];
-        return (
-          <div key={r.tier} className="flex items-center gap-2 text-[11px]">
-            <span className={`size-[6px] shrink-0 rounded-full ${s.dot}`} />
-            <span className={`w-8 shrink-0 font-semibold ${s.text}`}>{TIER_LABEL[r.tier]}</span>
-            <span className="text-[#56607a]">{r.condition}</span>
-          </div>
-        );
-      })}
+    <div className="flex flex-col gap-1 border-t border-[#eaecf3] pt-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {rows.map((r) => {
+          const s = GRADE_STYLE[r.tier];
+          return (
+            <div key={r.tier} className="flex min-w-0 items-center gap-1">
+              <span className={`size-[6px] shrink-0 rounded-full ${s.dot}`} />
+              <span className={`shrink-0 text-[10px] font-semibold ${s.text}`}>
+                {TIER_LABEL[r.tier]}
+              </span>
+              <span className="whitespace-nowrap text-[10px] text-[#56607a]">
+                {r.condition}
+              </span>
+            </div>
+          );
+        })}
+      </div>
       {lowerIsBetter && (
-        <p className="text-[10px] leading-4 text-[#97a0b8]">
-          이 지표는 원래 낮을수록 좋아서, 화면엔 보기 쉽게 역수(100 − 원본값%)로
-          표시했습니다. 그래도 값이 높을수록 좋습니다.
+        <p className="text-[9px] leading-3.5 text-[#97a0b8]">
+          원래는 낮을수록 좋은 지표라, 표시값은 역수(100 − 원본값%)입니다. 여기선
+          값이 높을수록 좋습니다.
         </p>
       )}
     </div>
@@ -293,7 +319,7 @@ export function AiMetricCard({
         </>
       )}
 
-      {expanded && <ExpandedDetail slug={slug} lowerIsBetter={lowerIsBetter} />}
+      <MetricLegend slug={slug} lowerIsBetter={lowerIsBetter} />
     </div>
   );
 }
